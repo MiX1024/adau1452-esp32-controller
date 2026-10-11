@@ -1,0 +1,4475 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="main">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADAU1452 控制器</title>
+<meta name="theme-color" content="#070b14">
+<style>
+  :root{
+    --bg:#070b14;
+    --panel:rgba(19,25,40,.72);
+    --stroke:rgba(255,255,255,.09);
+    --fg:#e8eefc;
+    --dim:#8b95ae;
+    --dim2:#5b6684;
+    --accent:#5b8cff;
+    --accent2:#35e0c8;
+    --green:#3fd07a;
+    --red:#ff5c5c;
+    --r:18px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{min-height:100%;}
+  body{
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;
+    color:var(--fg);
+    background:
+      radial-gradient(900px 520px at 10% -10%, rgba(91,140,255,.20), transparent 62%),
+      radial-gradient(760px 460px at 96% -4%, rgba(53,224,200,.13), transparent 64%),
+      radial-gradient(820px 620px at 50% 112%, rgba(255,159,67,.09), transparent 62%),
+      var(--bg);
+    background-attachment:fixed;
+    padding:18px 14px 44px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1460px;margin:0 auto;}
+
+  /* ---------- 侧边栏 + 分页 ---------- */
+  .shell{display:flex;gap:20px;align-items:flex-start;}
+  .side{position:sticky;top:16px;width:198px;flex:none;
+        display:flex;flex-direction:column;gap:5px;padding:13px 11px 14px;
+        border-radius:18px;border:1px solid var(--stroke);
+        background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012)),var(--panel);
+        box-shadow:0 18px 40px -28px rgba(0,0,0,.9);}
+  .side .navttl{font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;
+                color:var(--dim2);padding:4px 9px 8px;}
+  .navbtn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+          padding:11px 12px;border-radius:12px;border:1px solid transparent;
+          background:transparent;color:var(--dim);font:inherit;font-size:13.5px;
+          cursor:pointer;transition:.16s;}
+  .navbtn .ic{font-size:15px;width:17px;text-align:center;flex:none;opacity:.9;}
+  .navbtn .tag{margin-left:auto;font-size:10.5px;color:var(--dim2);}
+  .navbtn:hover{background:rgba(255,255,255,.06);color:#e8f0ff;}
+  .navbtn.on{background:linear-gradient(135deg,rgba(91,140,255,.22),rgba(53,224,200,.13));
+             border-color:rgba(91,140,255,.36);color:#fff;
+             box-shadow:0 12px 28px -18px rgba(91,140,255,.95);}
+  .navbtn.on .ic{color:var(--accent2);}
+  .side .navfoot{margin-top:8px;padding:9px 10px 3px;border-top:1px dashed rgba(255,255,255,.07);
+                 font-size:11px;line-height:1.7;color:var(--dim2);}
+  .main{flex:1 1 auto;min-width:0;}
+  /* 分页：按 html[data-page] 显隐。卡片只标 data-page，**新增页不用改 JS**。
+     用 :not() 写成通用形式，三页（首页/连线图/工具）都能覆盖。 */
+  html[data-page="main"]  .grid > [data-page]:not([data-page="main"]),
+  html[data-page="graph"] .grid > [data-page]:not([data-page="graph"]),
+  html[data-page="tools"] .grid > [data-page]:not([data-page="tools"]){display:none;}
+  @media (max-width:960px){
+    .shell{flex-direction:column;gap:12px;}
+    .side{position:static;width:100%;flex-direction:row;flex-wrap:wrap;
+          padding:8px;gap:8px;border-radius:14px;}
+    .side .navttl{display:none;}
+    .navbtn{width:auto;flex:1 1 auto;justify-content:center;padding:10px 14px;}
+    .navbtn .tag{display:none;}
+    .side .navfoot{display:none;}
+  }
+  /* 宽屏多列自适应：卡片按最小 340px 自动排布，窄屏自然回落单列 */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+        gap:14px;align-items:start;}
+  /* 横向更宽时用 12 列栅格精细分配，让关键卡片占更宽 */
+  @media (min-width:900px){
+    .grid{grid-template-columns:repeat(12,1fr);}
+    .card.span3{grid-column:span 3;}
+    .card.span4{grid-column:span 4;}
+    .card.span5{grid-column:span 5;}
+    .card.span6{grid-column:span 6;}
+    .card.span7{grid-column:span 7;}
+    .card.span8{grid-column:span 8;}
+    .card.span12{grid-column:span 12;}
+  }
+  @media (max-width:899px){
+    .card.span3,.card.span4,.card.span5,.card.span6,.card.span7,.card.span8,
+    .card.span12{grid-column:auto;}
+  }
+
+  /* ---------- 顶栏 ---------- */
+  .top{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
+  .logo{width:44px;height:44px;border-radius:14px;flex:none;display:grid;place-items:center;
+        font-weight:800;font-size:13px;letter-spacing:.5px;color:#05080f;
+        background:linear-gradient(140deg,#5b8cff,#35e0c8);
+        box-shadow:0 12px 28px -14px rgba(91,140,255,.95);}
+  .brand h1{font-size:16.5px;font-weight:700;letter-spacing:.2px;}
+  .brand .sub{font-size:11.5px;color:var(--dim2);margin-top:4px;font-variant-numeric:tabular-nums;}
+  .pills{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:999px;
+        font-size:11.5px;background:rgba(255,255,255,.045);border:1px solid var(--stroke);color:var(--dim);
+        transition:.25s;white-space:nowrap;}
+  .pill .ld{width:7px;height:7px;border-radius:50%;background:var(--dim2);flex:none;transition:.25s;}
+  .pill.ok{color:#c9f2d8;border-color:rgba(63,208,122,.35);background:rgba(63,208,122,.10);}
+  .pill.ok .ld{background:var(--green);box-shadow:0 0 9px var(--green);}
+  .pill.bad{color:#ffd7d7;border-color:rgba(255,92,92,.32);background:rgba(255,92,92,.09);}
+  .pill.bad .ld{background:var(--red);box-shadow:0 0 9px var(--red);animation:pulse 1.6s infinite;}
+  .pill.bridge{color:#c8f7f0;border-color:rgba(53,224,200,.38);background:rgba(53,224,200,.11);}
+  .pill.bridge .ld{background:var(--accent2);box-shadow:0 0 10px var(--accent2);animation:pulse 1.6s infinite;}
+  .pill.warn{color:#ffe0b8;border-color:rgba(255,159,67,.34);background:rgba(255,159,67,.1);}
+  .pill.warn .ld{background:var(--orange,#ff9f43);box-shadow:0 0 9px #ff9f43;}
+  @keyframes pulse{50%{opacity:.3;}}
+
+  /* ---------- 安全模式胶囊（状态栏开关） ---------- */
+  .pill.safe{cursor:pointer;user-select:none;}
+  .pill.safe .smini{position:relative;width:30px;height:17px;flex:none;border-radius:999px;
+                    background:rgba(255,255,255,.16);transition:.2s;}
+  .pill.safe .smini::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;
+                           border-radius:50%;background:#fff;transition:.2s;}
+  .pill.safe.on{color:#ffe0b8;border-color:rgba(255,159,67,.4);background:rgba(255,159,67,.13);}
+  .pill.safe.on .ld{background:#ff9f43;box-shadow:0 0 9px #ff9f43;}
+  .pill.safe.on .smini{background:linear-gradient(90deg,#ff9f43,#ffcf6b);}
+  .pill.safe.on .smini::after{left:15px;}
+
+  /* ---------- 状态栏 WiFi 胶囊 + 下拉菜单 ---------- */
+  .wmenu{position:relative;}
+  .pill.wpill{cursor:pointer;user-select:none;}
+  .pill.wpill:hover{background:rgba(255,255,255,.09);color:#e8f0ff;}
+  .pill.wpill .caret{font-size:9px;opacity:.6;margin-left:-1px;transition:transform .2s;}
+  .wmenu.open .pill.wpill .caret{transform:rotate(180deg);}
+  .wpanel{
+    position:absolute;right:0;top:calc(100% + 10px);width:min(380px,calc(100vw - 28px));
+    max-height:min(78vh,680px);overflow-y:auto;z-index:60;padding:14px 16px 16px;
+    border-radius:16px;border:1px solid rgba(255,255,255,.13);
+    background:linear-gradient(180deg,rgba(26,32,48,.99),rgba(14,18,30,.99));
+    box-shadow:0 26px 60px -20px rgba(0,0,0,.95),0 0 0 1px rgba(255,255,255,.03) inset;
+    opacity:0;visibility:hidden;transform:translateY(-8px) scale(.985);
+    transition:opacity .16s, transform .16s, visibility .16s;
+    overscroll-behavior:contain;
+  }
+  .wmenu.open .wpanel{opacity:1;visibility:visible;transform:none;}
+  .wpanelhead{display:flex;align-items:center;justify-content:space-between;
+              font-size:13px;font-weight:650;letter-spacing:.3px;color:#eaf1ff;
+              padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.07);}
+  .wpanel .section{margin:16px 0 4px;}
+  .wpanel .field{margin-top:10px;}
+  .wpanel .field input{font-size:13px;}
+  .wpanel .btn{margin-top:14px;}
+  .whint{font-size:11.5px;line-height:1.65;color:var(--dim2);margin-top:14px;
+         padding:9px 11px;border-radius:9px;background:rgba(91,140,255,.07);
+         border:1px solid rgba(91,140,255,.16);}
+  .whint b{color:#bcd2ff;font-weight:600;}
+  /* 窄屏时把菜单变成贴边全宽，避免溢出 */
+  @media (max-width:640px){
+    .wmenu{position:static;}
+    .wpanel{position:fixed;left:14px;right:14px;top:74px;width:auto;}
+  }
+
+  /* ---------- 卡片 ---------- */
+  .card{
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012)), var(--panel);
+    border:1px solid var(--stroke);
+    border-radius:var(--r);
+    padding:16px;
+    margin-bottom:0;                 /* 间距交给 grid gap */
+    box-shadow:0 18px 42px -26px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.05);
+    -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+    min-width:0;                     /* 防止长内容把网格撑破 */
+  }
+  .cardhead{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  .cardhead h2{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);font-weight:650;}
+  .hint{font-size:11px;color:var(--dim2);letter-spacing:.4px;}
+  .cardhead .hint{margin-left:auto;}
+  .cardhead .btn.gear{margin-left:auto;}
+  .cardhead .btn.gear + .hint{margin-left:0;}
+  .cardhead select{width:auto;max-width:100%;min-width:180px;background:#070b12;
+    border:1px solid rgba(255,255,255,.10);border-radius:9px;padding:6px 9px;
+    color:var(--fg);font-size:12px;font-family:inherit;}
+  .cardhead select:focus{outline:none;border-color:rgba(91,140,255,.6);}
+  #gpPick{flex:1 1 auto;min-width:0;max-width:260px;}
+  .cardhead .btn.sm{width:auto;margin:0;padding:6px 12px;font-size:11.5px;border-radius:9px;flex:none;}
+  /* 首页两张卡片等高，免得一边拖得很长、另一边下面空一大块 */
+  html[data-page="main"] .grid{align-items:stretch;}
+  /*
+   * 首页 EQ 的参数表。
+   * 之所以从“卡片网格”改成表：一个滤波器可能有十几个调整位点，
+   * 一行一段最紧凑、最好对比（同一列上下扫一眼就能看出哪段频点重复）。
+   * min-width + overflow-x：窄屏也不把列挤到文字截断，宁可整表横滑。
+   */
+  .eqtabwrap{margin-top:12px;overflow-x:auto;border:1px solid rgba(255,255,255,.07);
+             border-radius:12px;background:rgba(255,255,255,.016);}
+  .eqtabwrap[hidden]{display:none;}
+  .eqtab{width:100%;min-width:660px;border-collapse:collapse;table-layout:fixed;}
+  .eqtab th{font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--dim2);
+            text-align:left;padding:8px 9px 7px;white-space:nowrap;
+            background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.08);}
+  .eqtab td{padding:6px 9px;vertical-align:middle;
+            border-bottom:1px solid rgba(255,255,255,.045);}
+  .eqtab tbody tr:last-child td{border-bottom:none;}
+  .eqtab tbody tr:hover td{background:rgba(91,140,255,.05);}
+  .eqtab .c-num{width:58px;}
+  .eqtab .c-type{width:102px;}
+  .eqtab .c-freq{width:104px;}
+  .eqtab .c-q{width:76px;}
+  .eqtab .c-gain{width:104px;}
+  .eqtab .c-act{width:124px;}
+  /* ⚠️ 不能在 <td> 上写 display:flex —— 那会让它脱离 table-cell 布局、整张表错位。
+     要对齐就在里面再包一层。 */
+  .eqtab .bwrap{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:650;
+                color:#cbd6ee;}
+  .eqtab .eqb{width:8px;height:8px;border-radius:2px;flex:none;}
+  /* 地址 + 当前实际值（由系数反推），窄了用省略号，完整内容在 title 里 */
+  .eqtab .ba{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-size:10px;color:var(--dim2);font-variant-numeric:tabular-nums;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;}
+  .eqtab .eqsave{display:inline-block;margin-top:3px;font-size:9.5px;padding:1px 6px;
+    border-radius:999px;background:rgba(63,208,122,.15);color:#7ee0a5;
+    border:1px solid rgba(63,208,122,.28);}
+  .eqtab .eqsave.none{background:rgba(255,255,255,.05);color:var(--dim2);
+    border-color:rgba(255,255,255,.08);}
+  .eqtab .acts{display:flex;gap:6px;}
+  .eqtab .acts .btn{width:auto;margin:0;padding:5px 10px;font-size:11px;border-radius:8px;
+                    flex:1 1 auto;}
+  .eqtab .eqwarn{font-size:10px;color:#ffcf9b;margin-top:5px;line-height:1.4;}
+  .eqtab .eqwarn.bad{color:#ffb0b0;}
+
+  /* 首页 EQ：滤波器勾选列表（一个模块一个勾选框，颜色对应图上的曲线） */
+  .eqfilters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;}
+  .eqfilter{display:inline-flex;align-items:center;gap:6px;padding:5px 10px 5px 8px;
+    border-radius:999px;background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.09);cursor:pointer;font-size:12px;color:#c6d3ee;
+    user-select:none;transition:border-color .15s,background .15s;}
+  .eqfilter input{accent-color:#5b8cff;margin:0;}
+  .eqfilter i{width:8px;height:8px;border-radius:2px;flex:none;}
+  .eqfilter .efname{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .eqfilter .efcnt{margin-left:2px;font-size:10px;color:var(--dim2);}
+  .eqfilter.on{border-color:rgba(91,140,255,.55);background:rgba(91,140,255,.10);}
+  /* 图上可拖动的频点标记 */
+  .gpcurve .eqpt{cursor:grab;stroke:rgba(0,0,0,.6);stroke-width:1.2;
+    filter:drop-shadow(0 0 3px rgba(0,0,0,.7));}
+  .gpcurve .eqpt:hover{stroke:#fff;stroke-width:1.6;}
+  .gpcurve.eqgrp{touch-action:none;}
+
+  /* ---------- 电平表 ---------- */
+  .meter+.meter{margin-top:16px;}
+  .mhead{display:flex;align-items:center;gap:9px;margin-bottom:7px;}
+  .mtag{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:11px;font-weight:700;
+        background:rgba(91,140,255,.14);color:#9dbaff;border:1px solid rgba(91,140,255,.24);}
+  .mname{font-size:12.5px;color:var(--dim);}
+  .mval{margin-left:auto;font-size:12.5px;color:#dfe8fb;font-variant-numeric:tabular-nums;}
+  .track{position:relative;height:20px;border-radius:10px;background:#070b12;overflow:hidden;
+         box-shadow:inset 0 0 0 1px rgba(255,255,255,.06), inset 0 2px 6px rgba(0,0,0,.85);}
+  .grid-lines{position:absolute;inset:0;pointer-events:none;}
+  /* 刻度线的位置是按实际映射算出来的：frac = 10^(dB/60)，所以
+     -48dB→15.8%  -36dB→25.1%  -24dB→39.8%  -12dB→63.1%  0dB→100%
+     （之前用等距的 25% 分隔，那个刻度是错的） */
+  .grid-lines i{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.11);}
+  .grid-lines i.hot{background:rgba(255,255,255,.2);}
+  .grad{position:absolute;inset:0;clip-path:inset(0 100% 0 0);will-change:clip-path;
+        /* 与硬件一致：色相 绿120°→黄60°(t=0.4)→橙30°(t=0.7)→红0° */
+        background:linear-gradient(90deg,
+          hsl(120 72% 50%) 0%, hsl(95 82% 52%) 22%, hsl(60 92% 58%) 40%,
+          hsl(44 98% 58%) 56%, hsl(30 100% 57%) 70%, hsl(12 96% 59%) 86%, hsl(0 92% 62%) 100%);
+        box-shadow:0 0 18px rgba(63,208,122,.30);}
+  .peak{position:absolute;top:0;bottom:0;width:2px;background:#fff;border-radius:2px;opacity:.92;
+        box-shadow:0 0 9px rgba(255,255,255,.85);transform:translateX(-1px);will-change:left;}
+  /* 电平刻度：刻度线用绝对定位对齐到上面那几根竖线 */
+  .mscale{position:relative;height:13px;margin-top:5px;font-size:9.5px;color:var(--dim2);
+          font-variant-numeric:tabular-nums;}
+  .mscale span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap;}
+  .mscale span.lat{transform:translateX(-100%);}
+
+  /* ---------- 音量通道 ---------- */
+  #channels{display:flex;flex-direction:column;gap:10px;}
+  .chan{padding:13px 14px;border-radius:14px;background:rgba(255,255,255,.028);
+        border:1px solid rgba(255,255,255,.055);
+        transition:border-color .2s,background .2s,box-shadow .2s;}
+  .chan.sel{border-color:rgba(91,140,255,.55);background:rgba(91,140,255,.075);
+            box-shadow:0 10px 26px -20px rgba(91,140,255,1);}
+  .chan.hero{padding:15px 16px 12px;}
+  .ctop{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px;}
+  .cname{font-size:13px;font-weight:650;letter-spacing:.6px;color:#cbd6ee;display:flex;align-items:center;gap:8px;}
+  .chan.sel .cname::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);
+                           box-shadow:0 0 9px var(--accent);flex:none;}
+  .cval{font-variant-numeric:tabular-nums;color:#fff;font-size:14px;font-weight:600;white-space:nowrap;}
+  .cval .unit{font-size:.66em;margin-left:1px;opacity:.55;font-style:normal;font-weight:500;}
+  .chan.hero .cname{font-size:14px;letter-spacing:1.2px;}
+  .chan.hero .cval{font-size:32px;font-weight:700;letter-spacing:-.6px;line-height:1;}
+  .chan.hero .cval .unit{opacity:.5;font-weight:600;}
+  /* 三个音调并排：不再竖着排三行，能把卡片高度压下一大截 */
+  .tones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;}
+  .tones .chan{padding:11px 12px 9px;}
+  .tones .ctop{flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:4px;}
+  .tones .cname{font-size:11.5px;letter-spacing:.5px;}
+  .tones .cval{font-size:15px;}
+  .tones input[type=range]{margin-top:2px;}
+  /* 手机上也只有 340px 以下才竖排；再窄三列就放不下名字+数值了 */
+  @media (max-width:340px){ .tones{grid-template-columns:1fr;} }
+
+  input[type=range]{-webkit-appearance:none;appearance:none;display:block;width:100%;height:24px;
+                    background:transparent;cursor:pointer;margin-top:4px;}
+  input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:5px;
+    background:linear-gradient(90deg,var(--accent) 0%,var(--accent2) var(--p,50%),
+               rgba(255,255,255,.10) var(--p,50%),rgba(255,255,255,.10) 100%);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-5px;
+    border-radius:50%;background:#fff;border:3px solid #0b1020;
+    box-shadow:0 0 0 1px rgba(255,255,255,.25), 0 4px 12px rgba(0,0,0,.65);}
+  input[type=range]:active::-webkit-slider-thumb{background:var(--accent2);}
+  input[type=range]::-moz-range-track{height:8px;border-radius:5px;background:rgba(255,255,255,.10);}
+  input[type=range]::-moz-range-progress{height:8px;border-radius:5px;background:linear-gradient(90deg,var(--accent),var(--accent2));}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#fff;
+    border:3px solid #0b1020;box-shadow:0 4px 12px rgba(0,0,0,.65);}
+  .chan.hero input[type=range]::-webkit-slider-runnable-track{height:10px;border-radius:6px;}
+  .chan.hero input[type=range]::-webkit-slider-thumb{width:22px;height:22px;margin-top:-6px;}
+
+  /* ---------- 折叠卡片 ---------- */
+  details.card summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;}
+  details.card summary::-webkit-details-marker{display:none;}
+  details.card summary .stitle{font-size:14px;font-weight:650;}
+  details.card summary::after{content:"";width:8px;height:8px;margin-left:auto;flex:none;
+    border-right:2px solid var(--dim);border-bottom:2px solid var(--dim);transform:rotate(45deg);
+    transition:transform .25s;}
+  details.card[open] summary::after{transform:rotate(-135deg);}
+  details.card[open] summary{margin-bottom:4px;}
+
+  /* ---------- 表单 ---------- */
+  .field{margin-top:12px;}
+  .field label{display:block;font-size:11.5px;color:var(--dim);letter-spacing:.3px;margin-bottom:6px;}
+  .field input{width:100%;background:#070b12;border:1px solid rgba(255,255,255,.10);border-radius:11px;
+               padding:11px 12px;color:var(--fg);font-size:14px;font-family:inherit;transition:.18s;}
+  .field input::placeholder{color:#3d465c;}
+  .field input:focus{outline:none;border-color:rgba(91,140,255,.65);box-shadow:0 0 0 3px rgba(91,140,255,.16);}
+  .section{font-size:11px;color:var(--dim2);letter-spacing:1.2px;text-transform:uppercase;margin:18px 0 2px;}
+
+  .btn{width:100%;margin-top:16px;padding:12px;border-radius:12px;font-family:inherit;font-size:14px;font-weight:600;
+       color:#fff;cursor:pointer;border:1px solid rgba(91,140,255,.42);
+       background:linear-gradient(180deg,rgba(104,150,255,.95),rgba(64,112,230,.95));
+       box-shadow:0 14px 30px -18px rgba(91,140,255,1);transition:.18s;}
+  .btn:hover:not(:disabled){filter:brightness(1.08);transform:translateY(-1px);}
+  .btn:active:not(:disabled){transform:translateY(0);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none;}
+
+  /* ---------- OTA ---------- */
+  .drop{display:flex;align-items:center;gap:12px;padding:16px;border-radius:14px;cursor:pointer;
+        border:1.5px dashed rgba(255,255,255,.16);background:rgba(255,255,255,.02);transition:.18s;}
+  .drop:hover{border-color:rgba(91,140,255,.5);background:rgba(91,140,255,.06);}
+  .drop.drag{border-color:var(--accent);background:rgba(91,140,255,.12);}
+  .drop .ico{width:38px;height:38px;flex:none;border-radius:12px;display:grid;place-items:center;
+             font-size:17px;background:rgba(91,140,255,.14);color:#9dbaff;}
+  .drop .txt{font-size:13.5px;line-height:1.35;word-break:break-all;}
+  .drop .txt small{display:block;color:var(--dim2);font-size:11.5px;margin-top:3px;}
+  #fwFile{display:none;}
+  .pbar{height:6px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:14px;display:none;}
+  .pbar.on{display:block;}
+  .pbar i{display:block;height:100%;width:0;border-radius:4px;transition:width .15s linear;
+          background:linear-gradient(90deg,#35e0c8,#5b8cff);}
+
+  /* ---------- Toast ---------- */
+  .toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,16px);z-index:99;
+         max-width:min(92vw,520px);padding:11px 16px;border-radius:12px;font-size:13px;line-height:1.4;
+         background:rgba(20,26,42,.97);border:1px solid var(--stroke);color:var(--fg);
+         box-shadow:0 20px 44px -20px #000;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;}
+  .toast.show{opacity:1;transform:translate(-50%,0);}
+  .toast.ok{border-color:rgba(63,208,122,.5);}
+  .toast.err{border-color:rgba(255,92,92,.5);}
+  .toast.info{border-color:rgba(91,140,255,.5);}
+
+  /* ---------- 桥接 / 映像 / 调试 ---------- */
+  .notice{margin-top:12px;padding:10px 12px;border-radius:12px;font-size:12px;line-height:1.55;
+          color:#c6d3ee;background:rgba(91,140,255,.09);border:1px solid rgba(91,140,255,.22);}
+  .notice b{color:#fff;}
+  .notice.warn{color:#ffe0b8;background:rgba(255,159,67,.11);border-color:rgba(255,159,67,.32);}
+  .notice .btn{display:block;width:auto;margin-top:10px;padding:8px 14px;font-size:12.5px;}
+  .sw{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;
+      border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;}
+  .sw .lb{font-size:13px;line-height:1.3;}
+  .sw .lb small{display:block;color:var(--dim2);font-size:11px;margin-top:3px;line-height:1.4;}
+  .tgin{display:none;}
+  .tg{position:relative;width:44px;height:25px;flex:none;border-radius:999px;
+      background:rgba(255,255,255,.12);transition:.2s;}
+  .tg::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;
+             background:#fff;transition:.2s;}
+  .tgin:checked + .tg{background:linear-gradient(90deg,var(--accent),var(--accent2));}
+  .tgin:checked + .tg::after{left:22px;}
+  .kv{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:5px 0;
+      border-bottom:1px dashed rgba(255,255,255,.05);}
+  .kv:last-of-type{border-bottom:none;}
+  .kv .k{color:var(--dim);}
+  .kv .v{font-variant-numeric:tabular-nums;color:#dfe8fb;text-align:right;}
+  .kv .v.warn{color:#ffcf6b;}
+  .kv .v.bad{color:#ff8e8e;}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .btns .btn{margin-top:0;flex:1 1 auto;min-width:124px;width:auto;}
+  .btn.ghost{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14);
+             box-shadow:none;color:var(--fg);}
+  .btn.ghost:hover:not(:disabled){background:rgba(255,255,255,.10);}
+  .btn.danger{border-color:rgba(255,92,92,.42);background:linear-gradient(180deg,#ff6e6e,#d64646);}
+  .dsprow{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:10px;}
+  .dsprow .field{flex:1 1 92px;margin-top:0;}
+  .dsprow .field input{padding:10px 11px;}
+  .dsprow .btn{width:auto;margin-top:0;padding:10px 16px;flex:none;}
+
+  /* 输入框 + 右侧「应用」按钮同一行（用于卡片内的设置项，比单独一行按钮省空间） */
+  .frow{display:flex;gap:8px;align-items:stretch;}
+  .frow input{flex:1 1 auto;min-width:0;}
+  .frow .btn{width:auto;margin-top:0;padding:0 15px;flex:none;font-size:13.5px;border-radius:11px;}
+
+  /* ---------- DSP 程序映像：槽位列表 ---------- */
+  .field select{width:100%;background:#070b12;border:1px solid rgba(255,255,255,.10);border-radius:11px;
+                padding:11px 12px;color:var(--fg);font-size:14px;font-family:inherit;transition:.18s;}
+  .field select:focus{outline:none;border-color:rgba(91,140,255,.65);box-shadow:0 0 0 3px rgba(91,140,255,.16);}
+  .slotlist{margin-top:10px;display:flex;flex-direction:column;gap:8px;}
+  .slotrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;
+           background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);}
+  .slotrow.boot{border-color:rgba(91,140,255,.55);background:rgba(91,140,255,.10);}
+  .slotrow.empty{opacity:.6;}
+  .slotrow .smeta{flex:1 1 auto;min-width:0;}
+  .slotrow .sname{font-size:13px;line-height:1.35;word-break:break-all;}
+  .slotrow .ssub{font-size:11px;color:var(--dim2);margin-top:2px;}
+  .slotrow .ssub b{color:#9dbaff;}
+  .slotrow .sbtns{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end;}
+  .slotrow .sbtns button{width:auto;margin:0;padding:6px 10px;font-size:11.5px;border-radius:9px;
+                         min-width:0;flex:none;}
+  .slotempty{font-size:12px;color:var(--dim2);padding:6px 2px;}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+        color:#9dbaff;background:#070b12;border:1px solid rgba(255,255,255,.08);
+        border-radius:10px;padding:9px 11px;margin-top:10px;word-break:break-all;
+        line-height:1.5;white-space:pre-wrap;}
+  .mono.warn{color:#ffd489;border-color:rgba(255,207,107,.28);}
+  .mono.bad{color:#ffb0b0;border-color:rgba(255,142,142,.3);}
+
+  /* ---------- 日志窗口 ---------- */
+  .logbox{height:280px;overflow:auto;margin-top:12px;padding:10px 12px;border-radius:12px;
+          background:#05080f;border:1px solid rgba(255,255,255,.08);
+          font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+          font-size:11.5px;line-height:1.62;white-space:pre-wrap;word-break:break-word;
+          color:#a9b8d6;scrollbar-width:thin;}
+  .logbox::-webkit-scrollbar{width:8px;}
+  .logbox::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:4px;}
+  .logbox .e{color:#ff8f8f;}
+  .logbox .w{color:#ffd479;}
+  .logbox .i{color:#8fd0ff;}
+  .logbox .d{color:#7d8aa5;}
+  .logbox .t{color:#4d5a75;}
+  .logempty{color:var(--dim2);}
+  .logbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .logbar .hint{margin-left:auto;}
+  .wrapbtn{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;color:var(--dim);}
+  .btn.sm{width:auto;margin-top:0;padding:7px 13px;font-size:12.5px;border-radius:10px;}
+
+  /* OTA 横向长条：宽屏时投放区和按钮并排，避免卡片半空 */
+  .otarow{display:flex;gap:12px;align-items:center;}
+  .otarow .drop{flex:1 1 auto;min-width:0;}
+  .otarow .btn{width:auto;flex:none;margin-top:0;padding:12px 22px;}
+  @media (max-width:640px){
+    .otarow{flex-direction:column;align-items:stretch;}
+    .otarow .btn{width:100%;}
+  }
+
+  /* ---------- 连线图 ---------- */
+  .gpbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;}
+  .gpbar .btn{width:auto;margin-top:0;padding:7px 13px;font-size:12.5px;border-radius:10px;}
+  .gpbar .hint{margin-left:auto;}
+  #gpFull{padding:7px 14px;}
+  /* ---------- 连线图「网页全屏」 ----------
+     用固定定位铺满视口，而不是 Fullscreen API：页面全屏不影响浏览器 UI，
+     Esc 退出也能自己控制，而且不会因为全屏元素重新成为根元素导致样式跳变。 */
+  .card.gpfull{position:fixed;inset:0;z-index:130;margin:0;border:none;border-radius:0;
+    padding:14px 18px 16px;display:flex;flex-direction:column;
+    background:linear-gradient(180deg,#0b1222,#070b14 55%);
+    box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;}
+  .card.gpfull .cardhead{margin-bottom:8px;}
+  .card.gpfull .gpwrap{flex:1 1 auto;height:auto;min-height:0;margin-top:10px;}
+  .card.gpfull #gpTip{display:none;}
+  html.gpfs{overflow:hidden;}
+  .gpwrap{position:relative;height:min(62vh,540px);min-height:330px;margin-top:12px;
+          border-radius:14px;overflow:hidden;background:#05080f;
+          border:1px solid rgba(255,255,255,.08);cursor:grab;touch-action:none;}
+  .gpwrap.grabbing{cursor:grabbing;}
+  #gpSvg{display:block;width:100%;height:100%;user-select:none;}
+  #gpSvg .nd{cursor:pointer;}
+  #gpSvg .nd rect{fill:rgba(255,255,255,.055);stroke:rgba(255,255,255,.20);stroke-width:1.2;}
+  #gpSvg .nd text{fill:#e2eafb;font-size:11px;font-weight:600;}
+  #gpSvg .nd .sub{fill:#7d8aa5;font-size:9px;font-weight:400;}
+  #gpSvg .nd:hover rect{fill:rgba(255,255,255,.10);}
+  #gpSvg .nd.on rect{fill:rgba(91,140,255,.22);stroke:#5b8cff;stroke-width:2;}
+  #gpSvg .nd.rw rect{stroke:rgba(63,208,122,.62);}
+  #gpSvg .nd.rw:hover rect{stroke:rgba(63,208,122,.95);}
+  /* ⚠️ EQ 所在的模块用**更亮一档的绿**：能改电平/增益的模块很多，
+     而“里面有可调的 EQ”是需要一眼认出来的（它下面有十来段可调）。 */
+  #gpSvg .nd.rweq rect{stroke:rgba(88,238,140,.95);stroke-width:1.8;}
+  #gpSvg .nd.rweq:hover rect{fill:rgba(63,208,122,.10);}
+  #gpSvg .nd.ro rect{stroke:rgba(255,159,67,.42);}
+  #gpSvg .ln{fill:none;stroke:rgba(122,152,222,.5);stroke-width:1.4;}
+  #gpSvg .ln.hi{stroke:rgba(53,224,200,.85);stroke-width:2;}
+  #gpSvg .pdot{fill:rgba(150,175,230,.8);}
+  #gpSvg .mbar{fill:rgba(53,224,200,.75);}
+  #gpSvg .mbg{fill:rgba(255,255,255,.08);}
+  .gpparam{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.028);
+           border:1px solid rgba(255,255,255,.055);margin-top:9px;}
+  .gpparam .ph{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+  .gpparam .pn{flex:1 1 auto;min-width:0;word-break:break-all;color:#cbd6ee;font-size:12.5px;}
+  .gpparam .pv{font-variant-numeric:tabular-nums;color:#fff;font-weight:650;white-space:nowrap;font-size:13px;}
+  .gpparam .paddr{font-size:10.5px;color:var(--dim2);
+                  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;}
+  .gpparam .ptag{flex:none;font-size:10px;padding:2px 7px;border-radius:999px;
+                 background:rgba(255,255,255,.07);color:var(--dim);}
+  .gpparam .ptag.rw{background:rgba(53,224,200,.14);color:#8ef0e0;}
+  .gpparam .ptag.ro{background:rgba(255,159,67,.14);color:#ffcf9a;}
+  .gpparam .hexrow{margin-top:7px;font-size:11px;
+                   font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#8fa6d8;
+                   word-break:break-all;line-height:1.55;}
+  /* 图表：宽度撑满、高度由 viewBox 比例决定。
+     ⚠️ 不能用 preserveAspectRatio="none" —— 那会把线宽/文字/网格全拉变形
+     （实测 300×132 的图被拉到 748×132，横向拉伸 2.5 倍，很难看）。 */
+  .gpcurve{width:100%;height:auto;display:block;border-radius:10px;background:#05080f;
+           border:1px solid rgba(255,255,255,.07);}
+  /* 合并后的 EQ 总响应图 */
+  .gpcurve.eqgrp{margin-top:10px;}
+  .gpparam.gpgroup{border-color:rgba(91,140,255,.24);background:rgba(91,140,255,.05);}
+  .eqlegend{margin-top:9px;font-size:11px;line-height:1.7;color:#c6d3ee;
+            display:flex;flex-wrap:wrap;gap:3px 9px;}
+  .eqlegend > span{white-space:nowrap;display:inline-flex;align-items:center;gap:5px;
+    padding:2px 8px 2px 6px;border-radius:999px;background:rgba(255,255,255,.045);
+    border:1px solid rgba(255,255,255,.06);}
+  .eqlegend i{display:inline-block;width:7px;height:7px;border-radius:2px;flex:none;}
+  .eqlst{margin-top:10px;display:flex;flex-direction:column;gap:5px;}
+  /* EQ 逐段编辑器（“连线图”页右侧面板用，窄栏里竖着排） */
+  .eqlst .eqband{padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.03);
+          border:1px solid rgba(255,255,255,.06);transition:border-color .18s;}
+  .eqlst .eqband:hover{border-color:rgba(255,255,255,.12);}
+  .eqlst .eqband .bhead{display:flex;align-items:center;gap:7px;margin-bottom:7px;
+                 flex-wrap:wrap;}
+  .eqlst .eqband .bhead .eqb{width:8px;height:8px;border-radius:2px;flex:none;}
+  .eqlst .eqband .bhead .bn{font-size:11.5px;font-weight:650;color:#cbd6ee;flex:none;}
+  .eqlst .eqband .bhead .ba{margin-left:auto;font-size:10px;color:var(--dim2);
+    font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;}
+  .eqctl{display:grid;grid-template-columns:40px minmax(0,1fr);gap:6px 8px;align-items:center;}
+  .eqctl label{font-size:10.5px;color:var(--dim2);letter-spacing:.2px;}
+  /* 输入控件的外观两个版式共用 */
+  .eqctl select,.eqctl input,.eqtab select,.eqtab input{width:100%;min-width:0;background:#070b12;
+    border:1px solid rgba(255,255,255,.10);border-radius:9px;padding:7px 8px;
+    color:var(--fg);font-size:12px;font-family:inherit;font-variant-numeric:tabular-nums;}
+  .eqtab select,.eqtab input{padding:5px 7px;font-size:11.5px;border-radius:8px;}
+  .eqctl select:focus,.eqctl input:focus,.eqtab select:focus,.eqtab input:focus{
+    outline:none;border-color:rgba(91,140,255,.6);
+    box-shadow:0 0 0 2px rgba(91,140,255,.14);}
+  .eqctl .fld,.eqtab .fld{display:flex;align-items:center;gap:6px;min-width:0;}
+  .eqctl .fld input,.eqtab .fld input{flex:1 1 auto;}
+  .eqctl .u,.eqtab .u{font-size:10px;color:var(--dim2);flex:none;}
+  .eqctl .acts{grid-column:1 / -1;display:flex;gap:6px;margin-top:3px;}
+  .eqctl .btn{width:auto;margin:0;padding:6px 12px;font-size:11.5px;border-radius:9px;
+              flex:1 1 auto;}
+  .eqwarn{font-size:10.5px;color:#ffcf9b;margin-top:6px;}
+  .eqwarn.bad{color:#ffb0b0;}
+
+  /* 控件绑定：紧凑的胶囊行，不再堆两大行小字 */
+  .bindhint{margin-top:10px;padding-top:9px;border-top:1px dashed rgba(255,255,255,.06);
+            display:flex;flex-wrap:wrap;gap:5px;font-size:10.5px;}
+  .bindhint .bd{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;
+    border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);
+    color:var(--dim2);max-width:100%;}
+  .bindhint .bd b{color:#9dbaff;font-weight:600;flex:none;}
+  .bindhint .bd i{font-style:normal;color:#c6d3ee;overflow:hidden;text-overflow:ellipsis;
+                  white-space:nowrap;max-width:170px;}
+  .bindhint:empty{display:none;}
+  /* 首页两张卡片拉成等高，控件绑定提示贴底 */
+  html[data-page="main"] .grid > .card{display:flex;flex-direction:column;}
+  html[data-page="main"] .card > .bindhint{margin-top:auto;}
+
+  /* ---------- 弹窗（首页控件绑定） ---------- */
+  .modal{position:fixed;inset:0;z-index:120;background:rgba(3,6,12,.74);
+         display:none;align-items:center;justify-content:center;padding:16px;
+         backdrop-filter:blur(3px);}
+  .modal.on{display:flex;}
+  .mbox{width:min(680px,100%);max-height:88vh;overflow:auto;padding:18px 20px 20px;
+        border-radius:18px;border:1px solid rgba(255,255,255,.14);
+        background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.012)),#0d1322;
+        box-shadow:0 30px 70px -30px #000;}
+  .mbox h3{font-size:15px;margin-bottom:4px;}
+  .mbox .msub{font-size:11.5px;color:var(--dim2);line-height:1.65;margin-bottom:8px;}
+  .mbox .msub b{color:#9dbaff;}
+  .brow{display:flex;gap:8px;align-items:center;padding:9px 0;
+        border-bottom:1px dashed rgba(255,255,255,.06);}
+  .brow .bl{flex:0 0 78px;font-size:12px;color:#cbd6ee;}
+  .brow select{flex:1 1 auto;min-width:0;background:#070b12;
+    border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:8px 9px;
+    color:var(--fg);font-size:12px;font-family:inherit;}
+  .brow select:focus{outline:none;border-color:rgba(91,140,255,.65);}
+  .cardhead .btn.gear{width:auto;margin:0;padding:5px 11px;font-size:11.5px;
+                      border-radius:9px;flex:none;letter-spacing:.3px;}
+  .gpempty{color:var(--dim2);font-size:12.5px;padding:6px 2px;line-height:1.65;}
+  .gpstep{font-size:11.5px;color:var(--dim2);margin-top:14px;line-height:1.7;}
+  .gpstep b{color:#9dbaff;}
+  .gpstep code{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;
+               background:rgba(255,255,255,.06);padding:1px 5px;border-radius:5px;color:#cbd6ee;}
+
+  @media (max-width:420px){
+    .pills{width:100%;margin-left:0;}
+    .brand h1{font-size:15px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo">2.1</div>
+    <div class="brand">
+      <h1>ADAU1452 音频控制器</h1>
+      <div class="sub" id="hostText">—</div>
+    </div>
+    <div class="pills">
+      <span class="pill" id="linkPill"><i class="ld"></i><span id="linkText">连接中…</span></span>
+      <span class="pill" id="dspPill"><i class="ld"></i><span id="dspText">DSP</span></span>
+
+      <!-- 安全模式：开启后上电不写 DSP 参数，防 SigmaStudio 改程序后写旧地址爆音 -->
+      <label class="pill safe" id="safePill" for="safeToggle" title="开启后上电不主动写音量/EQ，防止用 SigmaStudio 改过 1452 程序后 ESP32 写旧地址导致爆音">
+        <i class="ld"></i><span id="safeText">安全模式</span>
+        <input type="checkbox" id="safeToggle" class="tgin"><span class="smini"></span>
+      </label>
+
+      <!-- WiFi：状态栏胶囊 + 点击向下展开的菜单（所有 WiFi 内容都在这里） -->
+      <div class="wmenu" id="wmenu">
+        <span class="pill wpill" id="wifiPill" role="button" tabindex="0" aria-haspopup="true">
+          <i class="ld"></i><span id="wifiText">WiFi</span><b class="caret">▾</b>
+        </span>
+
+        <div class="wpanel" id="wifiPanel">
+          <div class="wpanelhead">
+            <span>WiFi</span>
+            <button class="btn ghost sm" id="wifiClose">关闭</button>
+          </div>
+
+          <div class="section">链路信息</div>
+          <div class="kv"><span class="k">接入(STA)</span><span class="v" id="wfSta">—</span></div>
+          <div class="kv"><span class="k">信号强度</span><span class="v" id="wfRssi">—</span></div>
+          <div class="kv"><span class="k">信道</span><span class="v" id="wfCh">—</span></div>
+          <div class="kv"><span class="k">BSSID</span><span class="v" id="wfBssid">—</span></div>
+          <div class="kv"><span class="k">IP 地址</span><span class="v" id="wfIp">—</span></div>
+          <div class="kv"><span class="k">设备热点</span><span class="v" id="wfAp">—</span></div>
+
+          <div class="section">设备热点（ESP32 发射）</div>
+          <label class="sw" for="apEn">
+            <span class="lb">启用热点<small>关闭后只能用路由器/STA 那条路访问，请先确认 STA 已连上</small></span>
+            <input type="checkbox" id="apEn" class="tgin"><span class="tg"></span>
+          </label>
+          <div class="field">
+            <label>热点名称 SSID</label>
+            <input type="text" id="apSsid" maxlength="32" autocomplete="off" spellcheck="false" placeholder="DSP-2.1">
+          </div>
+          <div class="field">
+            <label>热点密码（至少 8 位）</label>
+            <input type="text" id="apPass" maxlength="64" autocomplete="off" spellcheck="false" placeholder="12345678">
+          </div>
+
+          <div class="section">家庭 WiFi（ESP32 接入）</div>
+          <label class="sw" for="staEn">
+            <span class="lb">启用 STA<small>关闭后不再连接路由器，也不会扫描/重连</small></span>
+            <input type="checkbox" id="staEn" class="tgin"><span class="tg"></span>
+          </label>
+          <div class="field">
+            <label>WiFi 名称 SSID</label>
+            <input type="text" id="staSsid" maxlength="32" autocomplete="off" spellcheck="false" placeholder="留空则不连接">
+          </div>
+          <div class="field">
+            <label>密码</label>
+            <input type="text" id="staPass" maxlength="64" autocomplete="off" spellcheck="false" placeholder="留空则不连接">
+          </div>
+
+          <div class="whint" id="wifiHint">
+            只切换开关会<b>立即生效</b>（不重启）；改动 SSID/密码后需重启。
+          </div>
+          <button class="btn" id="wifiSaveBtn">保存并重启</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="side">
+      <div class="navttl">导航</div>
+      <button class="navbtn on" data-page="main"><span class="ic">◉</span>首页<span class="tag">电平·EQ</span></button>
+      <button class="navbtn" data-page="graph"><span class="ic">◈</span>连线图<span class="tag">DSP 信号流</span></button>
+      <button class="navbtn" data-page="tools"><span class="ic">⚙</span>工具<span class="tag">调试</span></button>
+      <div class="navfoot">
+        首页：电平、音量、EQ，都带「⚙ 设置」用来选对应的 DSP 模块。<br>
+        「连线图」导入 SigmaStudio 导出的工程文件，把 DSP 程序画成信号流并直接调参。<br>
+        SigmaStudio 桥接、DSP 程序映像、地址与 I2C 诊断、固件升级、设备日志都在「工具」页。
+      </div>
+    </nav>
+
+    <div class="main">
+      <div class="grid">
+    <section class="card span6" data-page="main">
+      <div class="cardhead"><h2>电平表</h2>
+        <button class="btn ghost gear" id="lvBind">⚙ 设置</button>
+        <span class="hint" id="lvHint">峰值保持 · 实时</span></div>
+      <div class="notice warn" id="lvWarnBridge" hidden>
+        <b>电平与音量已交由 SigmaStudio 管理。</b><br>
+        「启用桥接服务」开启期间，ESP32 把 DSP 交给 SigmaStudio，
+        本地电平读取与音量调节停止，屏幕切到调试页。
+        <button class="btn sm" id="lvGoTools">去关闭桥接服务</button>
+      </div>
+      <div class="notice warn" id="lvWarnLocal" hidden>
+        <b>电平不可用：本地控制已关闭。</b><br>
+        关闭本地控制后 ESP32 不再访问 DSP，所以读不到电平。
+        若当前 DSP 程序与本控制器的地址不匹配（比如刚从 SigmaStudio 重新下载过），
+        开启后电平可能不准——但那也比没数据好看。
+        <button class="btn sm" id="lvEnableLocal">开启本地控制</button>
+      </div>
+      <div class="meter">
+        <div class="mhead"><span class="mtag">L</span><span class="mname">左声道</span><span class="mval" id="lVal">—</span></div>
+        <div class="track">
+          <div class="grad" id="lGrad"></div>
+          <div class="grid-lines"><i style="left:15.8%"></i><i style="left:25.1%"></i><i style="left:39.8%"></i><i style="left:63.1%"></i></div>
+          <div class="peak" id="lPeak" style="left:0"></div>
+        </div>
+        <div class="mscale"><span style="left:15.8%">−48</span><span style="left:25.1%">−36</span><span style="left:39.8%">−24</span><span style="left:63.1%">−12</span><span class="lat" style="left:100%">0 dB</span></div>
+      </div>
+      <div class="meter">
+        <div class="mhead"><span class="mtag">R</span><span class="mname">右声道</span><span class="mval" id="rVal">—</span></div>
+        <div class="track">
+          <div class="grad" id="rGrad"></div>
+          <div class="grid-lines"><i style="left:15.8%"></i><i style="left:25.1%"></i><i style="left:39.8%"></i><i style="left:63.1%"></i></div>
+          <div class="peak" id="rPeak" style="left:0"></div>
+        </div>
+        <div class="mscale"><span style="left:15.8%">−48</span><span style="left:25.1%">−36</span><span style="left:39.8%">−24</span><span style="left:63.1%">−12</span><span class="lat" style="left:100%">0 dB</span></div>
+      </div>
+      <div class="bindhint" id="lvBindInfo"></div>
+    </section>
+
+    <section class="card span6" data-page="main">
+      <div class="cardhead"><h2>音量控制</h2>
+        <button class="btn ghost gear" id="volBind">⚙ 设置</button>
+        <span class="hint" id="volHint">实时同步 DSP</span></div>
+      <div class="notice warn" id="volWarn" hidden>
+        <b>音量已暂停。</b>桥接服务开启时 DSP 由 SigmaStudio 管理，
+        本地写入被拒绝（以免改到 SigmaStudio 正在调试的程序）。
+        关闭桥接服务后即可恢复调节。
+      </div>
+      <div id="channels"></div>
+      <div class="bindhint" id="volBindInfo"></div>
+    </section>
+
+    <!-- ================= 首页 EQ =================
+         模块列表与参数全部来自「连线图」页导入的工程文件，不硬编码地址。 -->
+    <section class="card span12" data-page="main" id="eqCard">
+      <div class="cardhead">
+        <h2>均衡器 EQ</h2>
+        <button class="btn ghost sm" id="eqAllBtn">全选</button>
+        <button class="btn ghost sm" id="eqReadBtn">读取当前值</button>
+        <span class="hint" id="eqHint">需先在「连线图」导入工程文件</span>
+      </div>
+      <div class="eqfilters" id="eqFilters"></div>
+      <svg class="gpcurve eqgrp" id="eqChart"></svg>
+      <div class="eqlegend" id="eqLegend">—</div>
+      <div class="paddr eqinfo" id="eqInfo">—</div>
+      <div class="eqtabwrap" id="eqTabWrap" hidden>
+        <table class="eqtab">
+          <thead><tr>
+            <th class="c-num">段</th>
+            <th class="c-type">类型</th>
+            <th class="c-freq">频率</th>
+            <th class="c-q">Q</th>
+            <th class="c-gain">增益</th>
+            <th class="c-addr">地址 · 当前值</th>
+            <th class="c-act">操作</th>
+          </tr></thead>
+          <tbody id="eqBands"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= 连线图 =================
+         数据来源是 SigmaStudio 的「Export system files」：
+           *_NetList.xml → 拓扑（方块名/类型/坐标/连线）
+           *.params     → 每个参数的名称与地址
+         地址全部从 .params 解析，**不硬编码**，所以改 DSP 程序后重新导入即可。 -->
+    <section class="card span12" data-page="graph">
+      <div class="cardhead"><h2>连线图数据</h2><span class="hint" id="gpSum">设备上暂无数据</span></div>
+      <div class="notice">
+        在 SigmaStudio 里执行 <b>Action → Export system files</b>，把导出的
+        <b>*_NetList.xml</b> 和 <b>*.params</b> 一起选进来（两个文件在同目录，一次全选即可），
+        网页会自动解析并画出信号流。<br>
+        数据存在<b>设备 flash</b> 里，换电脑或手机打开都不用重新导入；
+        改过 DSP 程序后只要再导入一次，<b>地址变了也不需要改固件</b>。
+      </div>
+      <div class="otarow">
+        <div class="drop" id="gpDrop">
+          <div class="ico">◈</div>
+          <div class="txt" id="gpDropText">点击或拖入 <b>*_NetList.xml</b> 与 <b>*.params</b><small>按文件内容自动识别类型，可以只更新其中一个</small></div>
+        </div>
+        <button class="btn ghost" id="gpClear">清除设备数据</button>
+      </div>
+      <input type="file" id="gpFile" multiple accept=".xml,.params,.txt,.h">
+      <div class="pbar" id="gpBar"><i id="gpFill"></i></div>
+      <div class="kv"><span class="k">拓扑文件（NetList）</span><span class="v" id="gpNetlist">—</span></div>
+      <div class="kv"><span class="k">参数文件（params）</span><span class="v" id="gpParams">—</span></div>
+      <div class="kv"><span class="k">解析结果</span><span class="v" id="gpStat">—</span></div>
+    </section>
+
+    <section class="card span7" id="gpFlowCard" data-page="graph">
+      <div class="cardhead"><h2>信号流</h2><span class="hint" id="gpHint">—</span></div>
+      <div class="gpbar">
+        <button class="btn ghost" id="gpZoomOut">−</button>
+        <button class="btn ghost" id="gpZoomIn">+</button>
+        <button class="btn ghost" id="gpFit">适配</button>
+        <label class="wrapbtn" for="gpAuto">
+          <input type="checkbox" id="gpAuto" class="tgin" checked><span class="tg"></span>
+          <span>自动排列</span>
+        </label>
+        <span class="hint" id="gpLegend">亮绿=有 EQ 可调 · 绿框=可调 · 橙框=只读</span>
+        <button class="btn ghost" id="gpFull">⛶ 全屏</button>
+      </div>
+      <div class="gpwrap" id="gpWrap"><svg id="gpSvg"></svg></div>
+      <div class="gpstep" id="gpTip">
+        滚轮缩放 · 按住拖动平移 · 点方块看参数。信号链较长，默认按 <b>1:1</b>
+        从信号入口开始显示，想纵览全貌点 <b>适配</b>。<br>
+        图是只读的：增删方块 / 改连线请回 SigmaStudio 做。
+      </div>
+    </section>
+
+    <section class="card span5" data-page="graph">
+      <div class="cardhead">
+        <h2 id="gpSelName">模块参数</h2>
+        <select id="gpPick"></select>
+        <span class="hint" id="gpSelMeta">未选中</span>
+      </div>
+      <div id="gpPanel"><div class="gpempty">在左边点一个方块，这里会列出它的参数。</div></div>
+    </section>
+
+    <details class="card span6" id="bridgeCard" data-page="tools">
+      <summary><span class="stitle">SigmaStudio 桥接</span><span class="hint" id="brSummary">未启用</span></summary>
+      <div class="notice">
+        在 SigmaStudio 的 <b>Hardware Configuration</b> 里拖入 <b>TCP/IP</b> 通信通道，右键选
+        <b>Show TCPIP form</b>，填本机 IP 与下面端口后 Open connection —— 之后就能像接 USBi 一样在线调参、
+        执行 <b>Link Compile Download</b>。
+      </div>
+
+      <label class="sw" for="brEnable">
+        <span class="lb">启用桥接服务<small>ESP32 监听 TCP 端口，等待 SigmaStudio 连接</small></span>
+        <input type="checkbox" id="brEnable" class="tgin"><span class="tg"></span>
+      </label>
+      <label class="sw" for="brVerbose">
+        <span class="lb">逐报文日志<small>把 SigmaStudio 每一条读/写报文（地址、长度）记到网页日志里，用于排查它到底访问了哪些地址。默认关闭：高频轮询时会产生大量日志</small></span>
+        <input type="checkbox" id="brVerbose" class="tgin"><span class="tg"></span>
+      </label>
+      <label class="sw" for="brLocal">
+        <span class="lb">本地控制<small>允许编码器 / 网页音量控制 DSP。SigmaStudio 重编过程序后本地地址会失配，建议关闭</small></span>
+        <input type="checkbox" id="brLocal" class="tgin"><span class="tg"></span>
+      </label>
+
+      <div class="field">
+        <label>监听端口（默认 8086）</label>
+        <div class="frow">
+          <input type="number" id="brPort" min="1024" max="65535" step="1" inputmode="numeric">
+          <button class="btn ghost" id="brPortApply">应用</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>读应答间隔（微秒）
+          <small>⚠ 关键参数：SigmaStudio 一次 recv 只取一条应答，多条紧挨着发会被它
+          一次性读走导致崩溃。实测 15000 还不够、<b>30000（30ms）才稳定</b>。
+          调大→更稳但刷新变慢；0 = 关闭</small>
+        </label>
+        <div class="frow">
+          <input type="number" id="brGap" min="0" max="200000" step="1000" inputmode="numeric">
+          <button class="btn ghost" id="brGapApply">应用</button>
+        </div>
+      </div>
+
+      <div class="kv"><span class="k">服务状态</span><span class="v" id="brRun">—</span></div>
+      <div class="kv"><span class="k">SigmaStudio</span><span class="v" id="brClient">—</span></div>
+      <div class="kv"><span class="k">转发的报文</span><span class="v" id="brStat">—</span></div>
+      <div class="kv"><span class="k">最近访问</span><span class="v" id="brLast">—</span></div>
+      <div class="kv"><span class="k">读响应耗时</span><span class="v" id="brLat">—</span></div>
+      <div class="kv"><span class="k">抖动（&gt;10ms）</span><span class="v" id="brJit">—</span></div>
+      <div class="kv"><span class="k">累计连接次数</span><span class="v" id="brConn">—</span></div>
+      <div class="kv"><span class="k">当前连接数</span><span class="v" id="brActive">—</span></div>
+      <div class="kv"><span class="k">重同步字节</span><span class="v" id="brSync">—</span></div>
+    </details>
+
+    <details class="card span6" id="imgCard" data-page="tools">
+      <summary><span class="stitle">DSP 程序映像</span><span class="hint" id="imgSummary">无</span></summary>
+      <div class="notice">
+        先点「开始录制」，再到 SigmaStudio 里执行 <b>Link Compile Download</b>，
+        然后点「保存到 Flash」。flash 里有 <b>4 个槽位</b>，每份固件占一个，
+        可以分别起名、单独加载 —— <b>换程序不用重新编译固件，也不需要自举 EEPROM</b>。<br>
+        开了「上电自动加载」后，1452 每次上线都会自动推送；
+        SigmaStudio 调试完之后不会重复推送（不覆盖它刚下的程序）。
+      </div>
+
+      <label class="sw" for="imgAuto">
+        <span class="lb">上电自动加载 DSP 程序<small>开启后会<b>一直监控 1452</b>：它每次上线（含断电重启后）都会自动把下面选中的固件推过去。会先等它就绪再推，推送后还会回读校验，程序被覆盖会自动重推。<br>
+        <b style="color:#ffcf9b">默认关闭</b>。若 1452 已改用 <b>selfboot</b>（自己从 EEPROM 启动），请保持关闭 —— 两者会互相覆盖。</small></span>
+        <input type="checkbox" id="imgAuto" class="tgin"><span class="tg"></span>
+      </label>
+
+      <div class="field">
+        <label>开机推送到 1452<small>选择哪一份固件在上电时推送给 DSP</small></label>
+        <select id="imgBoot"></select>
+      </div>
+
+      <div class="field">
+        <label>就绪等待（毫秒）
+          <small>探测到 1452 上线后等多久才开始推送。selfboot 关闭时不需要久等，
+          <b>默认 500ms</b>；觉得慢可以调小（0 = 一发现就推）。若推送失败会自动递增重试。
+          </small>
+        </label>
+        <div class="frow">
+          <input type="number" id="imgSettle" min="0" max="5000" step="100" inputmode="numeric">
+          <button class="btn ghost" id="imgSettleApply">应用</button>
+        </div>
+      </div>
+
+      <div class="kv"><span class="k">本次开机</span><span class="v" id="imgBootRes">—</span></div>
+      <div class="kv"><span class="k">录制状态</span><span class="v" id="imgRec">—</span></div>
+      <div class="kv"><span class="k">RAM 录制</span><span class="v" id="imgRam">—</span></div>
+      <div class="kv"><span class="k">Flash 映像</span><span class="v" id="imgFlash">—</span></div>
+
+      <div class="section">固件槽位（最多 4 份）</div>
+      <div class="slotlist" id="imgSlots"></div>
+
+      <div class="btns">
+        <button class="btn" id="imgRecBtn">开始录制</button>
+        <button class="btn ghost" id="imgSave">保存到 Flash</button>
+        <button class="btn ghost" id="imgClear">清除录制</button>
+        <button class="btn ghost" id="imgErase">清除全部映像</button>
+        <button class="btn ghost" id="imgDownload">下载备份</button>
+      </div>
+    </details>
+
+    <details class="card span12" id="dbgCard" data-page="tools">
+      <summary><span class="stitle">地址调试</span><span class="hint">不依赖 SigmaStudio</span></summary>
+      <div class="notice">
+        地址语义：<b>&ge; 0xF000</b> 为核心寄存器（按字节）；<b>&lt; 0xF000</b> 为 DSP 内存（按字，1 字 = 4 字节）。
+        读到 4 字节时会附带 8.24 定点解释。
+      </div>
+      <div class="dsprow">
+        <div class="field"><label>地址（支持 0x 前缀）</label>
+          <input type="text" id="dbgAddr" value="0x001D" spellcheck="false" autocomplete="off"></div>
+        <div class="field" style="flex:0 0 78px"><label>长度</label>
+          <input type="number" id="dbgLen" value="4" min="1" max="64" inputmode="numeric"></div>
+        <button class="btn ghost" id="dbgRead">读取</button>
+      </div>
+      <div class="dsprow">
+        <div class="field"><label>写入值（0x 十六进制 / 纯数字为十进制）</label>
+          <input type="text" id="dbgVal" placeholder="0x00804DCE" spellcheck="false" autocomplete="off"></div>
+        <button class="btn ghost" id="dbgWrite">写入</button>
+      </div>
+      <div class="mono" id="dbgOut">—</div>
+      <div class="btns">
+        <button class="btn danger" id="dbgReset">软复位 DSP</button>
+      </div>
+
+      <div class="section">I2C 频率（下载提速）</div>
+      <div class="notice">
+        PROGRAM 区写入是纯 I2C 线速限制，所以提高 SCL 能直接缩短下载时间
+        （实测 400kHz → 600kHz，下载 0.77s 降到约 0.5s，0 错误）。
+        <b>ADAU1452 官方上限是 400kHz</b>，超频属越规操作，
+        改完请重新下载并回读校验。掉电保留。
+      </div>
+      <div class="dsprow">
+        <div class="field"><label>SCL 频率（Hz）</label>
+          <input type="number" id="i2cHz" min="10000" max="1000000" step="10000" inputmode="numeric"></div>
+        <button class="btn ghost" id="i2cSetHz">应用频率</button>
+      </div>
+      <div class="btns">
+        <button class="btn ghost sm" id="i2c100k">100k</button>
+        <button class="btn ghost sm" id="i2c400k">400k</button>
+        <button class="btn ghost sm" id="i2c600k">600k</button>
+        <button class="btn ghost sm" id="i2c1m">1M</button>
+        <button class="btn ghost sm" id="i2cRefresh">刷新</button>
+      </div>
+      <label class="sw" for="i2cPullup">
+        <span class="lb">内部弱上拉<small>ESP32 内部上拉约 45kΩ，对 400kHz 偏弱；
+        板上有外部上拉时不需要它</small></span>
+        <input type="checkbox" id="i2cPullup" class="tgin"><span class="tg"></span>
+      </label>
+      <div class="mono" id="i2cOut">—</div>
+    </details>
+
+    <section class="card span12" data-page="tools">
+      <div class="cardhead"><h2>固件升级</h2><span class="hint">OTA · A/B 双分区</span></div>
+      <div class="otarow">
+        <div class="drop" id="drop">
+          <div class="ico">⬆</div>
+          <div class="txt" id="dropText">点击或拖入 .bin 固件<small>上传完成后设备自动重启</small></div>
+        </div>
+        <button class="btn" id="otaBtn">上传并升级</button>
+      </div>
+      <input type="file" id="fwFile" accept=".bin">
+      <div class="pbar" id="otaBar"><i id="otaFill"></i></div>
+    </section>
+
+    <section class="card span12" id="logCard" data-page="tools">
+      <div class="cardhead">
+        <div class="logbar">
+          <h2>设备日志</h2>
+          <label class="wrapbtn" for="logOn">
+            <input type="checkbox" id="logOn" class="tgin"><span class="tg"></span>
+            <span>显示日志</span>
+          </label>
+          <button class="btn ghost sm" id="logClear">清空</button>
+          <label class="wrapbtn" for="logAuto">
+            <input type="checkbox" id="logAuto" class="tgin" checked><span class="tg"></span>
+            <span>自动滚动</span>
+          </label>
+        </div>
+        <span class="hint" id="logInfo">未开启</span>
+      </div>
+      <div class="logbox" id="logBox"><span class="logempty">勾选「显示日志」后，设备的运行日志会实时推送到这里。</span></div>
+    </section>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<div class="modal" id="bindModal">
+  <div class="mbox">
+    <h3 id="bindTitle">控件绑定</h3>
+    <div class="msub" id="bindSub">
+      把首页的每个控件对到「连线图」里解析出来的具体参数上。<br>
+      绑定按<b>名字</b>保存，所以以后换了 DSP 程序、重新导入工程文件后会自动重新对应到新地址，
+      <b>不需要改固件</b>。
+    </div>
+    <div id="bindRows"></div>
+    <div class="btns">
+      <button class="btn" id="bindSaveBtn">保存并应用</button>
+      <button class="btn ghost" id="bindResetBtn">全部恢复默认</button>
+      <button class="btn ghost" id="bindCloseBtn">取消</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- 基础引用 ---------- */
+const $ = (id) => document.getElementById(id);
+
+/* ---------- 侧边栏分页 ----------
+ * 首页 = 电平表 + 音量控制（日常使用只看这两张）
+ * 连线图 = SigmaStudio 工程的可视化 + 在方块上直接调参
+ * 工具 = 桥接 / 映像 / 地址与 I2C / OTA / 日志
+ * 状态存在 html[data-page] 上，由 CSS 控制显隐；顺便同步到 hash 便于收藏。
+ */
+const PAGE_KEY = 'dsp_page';
+const PAGES = ['main', 'graph', 'tools'];
+const navBtns = Array.from(document.querySelectorAll('.navbtn'));
+
+function setPage(p) {
+  if (PAGES.indexOf(p) < 0) p = 'main';
+  document.documentElement.dataset.page = p;
+  navBtns.forEach(b => b.classList.toggle('on', b.dataset.page === p));
+  try { localStorage.setItem(PAGE_KEY, p); } catch (_) {}
+  if (location.hash !== '#/' + p) {
+    history.replaceState(null, '', '#/' + p);
+  }
+  /* 连线图那页的画布是 svg，隐藏时量不到尺寸，切过去要重新适配一次 */
+  if (p === 'graph') gpOnShow();
+  /* 离开这一页就退出全屏（用 class 判，不用变量：这个函数在脚本开头就会被调用，
+     而全屏状态变量在后半段才声明，直接读会撞 TDZ） */
+  else if (document.documentElement.classList.contains('gpfs')) gpSetFull(false);
+}
+
+navBtns.forEach(b => b.addEventListener('click', () => setPage(b.dataset.page)));
+
+/* 初始页：优先 hash，其次上次记忆，最后首页 */
+(function initPage() {
+  const m = location.hash.match(/^#\/(main|graph|tools)$/);
+  let saved = null;
+  try { saved = localStorage.getItem(PAGE_KEY); } catch (_) {}
+  setPage(m ? m[1] : (saved || 'main'));
+})();
+
+window.addEventListener('hashchange', () => {
+  const m = location.hash.match(/^#\/(main|graph|tools)$/);
+  if (m) setPage(m[1]);
+});
+
+const linkPill = $('linkPill'), linkText = $('linkText');
+const dspPill = $('dspPill'), dspText = $('dspText');
+const wifiPill = $('wifiPill'), wifiText = $('wifiText');
+
+/*
+ * WiFi 状态。接路由器时"偶尔崩"最可能和链路有关，
+ * 所以把 RSSI/信道直接摆在状态栏，一眼就能排除或确认。
+ * 用 -60 / -72 dBm 两个经验阈值分色。
+ */
+function applyWifiLink(w) {
+  if (!w) return;
+
+  /* --- 状态栏胶囊文字：WiFi -48dBm CH11 --- */
+  if (!w.sta_enabled) {
+    wifiPill.className = 'pill wpill';
+    wifiText.textContent = 'WiFi STA 已关';
+  } else if (!w.connected) {
+    wifiPill.className = 'pill wpill bad';
+    wifiText.textContent = 'WiFi 未连接';
+  } else if (typeof w.rssi === 'number') {
+    const cls = w.rssi > -60 ? 'ok' : (w.rssi > -72 ? '' : 'bad');
+    wifiPill.className = 'pill wpill ' + cls;
+    wifiText.textContent = 'WiFi ' + w.rssi + 'dBm CH' + (w.ch || '?');
+  } else {
+    wifiPill.className = 'pill wpill';
+    wifiText.textContent = 'WiFi 已连接';
+  }
+
+  /* --- 下拉菜单里的链路详情 --- */
+  $('wfSta').textContent = w.sta_enabled
+    ? (w.connected ? '已连接' : '未连接')
+    : '已关闭';
+  $('wfSta').className = 'v' + (w.sta_enabled && !w.connected ? ' warn' : '');
+  $('wfRssi').textContent = (typeof w.rssi === 'number') ? (w.rssi + ' dBm') : '—';
+  $('wfRssi').className = 'v' + (typeof w.rssi === 'number'
+    ? (w.rssi > -60 ? '' : (w.rssi > -72 ? ' warn' : ' bad')) : '');
+  $('wfCh').textContent = w.ch ? ('CH' + w.ch) : '—';
+  $('wfBssid').textContent = w.bssid || '—';
+  $('wfIp').textContent = w.ip || '—';
+  $('wfAp').textContent = w.ap_enabled ? (w.ap_ssid + '（已开启）') : '已关闭';
+  /* 开关只在用户没在菜单里手动改时才同步，避免把操作中的勾选拽回去 */
+  const pend = Date.now() < wfPending;
+  if (!pend) {
+    $('apEn').checked = !!w.ap_enabled;
+    $('staEn').checked = !!w.sta_enabled;
+  }
+}
+
+/* ---------- WiFi 下拉菜单 ---------- */
+const wmenu = $('wmenu');
+let wifiLoaded = false;
+let wfPending = 0;     /* 刚提交设置后的短时保护 */
+
+function toggleWifiPanel(force) {
+  const open = (force !== undefined) ? force : !wmenu.classList.contains('open');
+  wmenu.classList.toggle('open', open);
+  if (open && !wifiLoaded) loadWifiConfig();
+}
+wifiPill.addEventListener('click', () => toggleWifiPanel());
+wifiPill.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleWifiPanel(); }
+});
+$('wifiClose').addEventListener('click', () => toggleWifiPanel(false));
+/* 点击菜单外部或按 Esc 关闭 */
+document.addEventListener('click', e => {
+  if (wmenu.classList.contains('open') && !wmenu.contains(e.target)) toggleWifiPanel(false);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') toggleWifiPanel(false);
+});
+
+async function loadWifiConfig() {
+  wifiLoaded = true;
+  try {
+    const cfg = await (await fetch('/api/wifi')).json();
+    $('apSsid').value = (cfg.ap && cfg.ap.ssid) || '';
+    $('apPass').value = (cfg.ap && cfg.ap.pass) || '';
+    $('staSsid').value = (cfg.sta && cfg.sta.ssid) || '';
+    $('staPass').value = (cfg.sta && cfg.sta.pass) || '';
+    $('apEn').checked = !!(cfg.ap && cfg.ap.enabled);
+    $('staEn').checked = !!(cfg.sta && cfg.sta.enabled);
+    applyWifiLink(cfg);                 /* /api/wifi 也带链路信息 */
+  } catch (e) {
+    wifiLoaded = false;
+    toast('加载 WiFi 配置失败', 'err');
+  }
+}
+
+/*
+ * 开关单独即时生效（不重启）。
+ * 必须先设 wfPending 再发请求：状态推送每 200ms 一次，
+ * 否则推送里的旧值会把刚点的开关拽回去（之前那个"关不掉"的 bug）。
+ * 只发 enabled、不发 SSID/密码，设备端就会走在线切换路径。
+ */
+async function wfApplySwitches() {
+  const apEn = $('apEn').checked;
+  const staEn = $('staEn').checked;
+
+  if (!apEn && !staEn) {
+    toast('热点与 STA 不能同时关闭，否则将无法访问设备', 'err', 0);
+    $('apEn').checked = true;          /* 还原 */
+    return;
+  }
+
+  wfPending = Date.now() + 3000;       /* 期间不接受状态推送覆盖开关 */
+  try {
+    const r = await fetch('/api/wifi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ap: { enabled: apEn }, sta: { enabled: staEn } })
+    });
+    const txt = (await r.text()).trim();
+    let j = {};
+    try { j = JSON.parse(txt); } catch (_) {}
+    if (!r.ok) {
+      toast(j.error || txt || '切换失败', 'err', 0);
+      wfPending = 0;
+      wifiLoaded = false;
+      loadWifiConfig();                /* 拉回真实状态 */
+      return;
+    }
+    toast('热点 ' + (apEn ? '已开启' : '已关闭') +
+          ' · STA ' + (staEn ? '已开启' : '已关闭'), 'ok');
+  } catch (e) {
+    toast('切换失败：' + e.message, 'err', 0);
+    wfPending = 0;
+  }
+  wfPending = 0;
+}
+
+['apEn', 'staEn'].forEach(id => $(id).addEventListener('change', wfApplySwitches));
+
+/*
+ * 保存。设备端会自动区分两种情况：
+ *   - 账号密码没变 → 只在线切换模式，立即生效、不重启（返回 restart=false）
+ *   - 账号密码有变 → 写入 NVS 后重启
+ * 所以这里统一发一份带 enabled 的完整配置，按返回的 restart 决定提示语。
+ */
+$('wifiSaveBtn').addEventListener('click', async () => {
+  const apSsid = $('apSsid').value.trim();
+  const apPass = $('apPass').value;
+  const staSsid = $('staSsid').value.trim();
+  const staPass = $('staPass').value;
+  const apEn = $('apEn').checked;
+  const staEn = $('staEn').checked;
+
+  if (!apEn && !staEn) { toast('热点与 STA 不能同时关闭', 'err'); return; }
+  if (apEn && !apSsid) { toast('设备热点名称不能为空', 'err'); return; }
+  if (apEn && apPass && apPass.length < 8) { toast('设备热点密码至少 8 位', 'err'); return; }
+
+  const btn = $('wifiSaveBtn');
+  btn.disabled = true;
+  btn.textContent = '保存中…';
+  wfPending = Date.now() + 4000;
+  try {
+    const resp = await fetch('/api/wifi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ap: { ssid: apSsid, pass: apPass, enabled: apEn },
+        sta: { ssid: staSsid, pass: staPass, enabled: staEn }
+      })
+    });
+    const txt = (await resp.text()).trim();
+    let j = {};
+    try { j = JSON.parse(txt); } catch (_) {}
+    if (!resp.ok) {
+      toast(j.error || txt || '保存失败', 'err', 0);
+    } else if (j.restart === false) {
+      toast('开关已生效（未重启）', 'ok');
+      wifiLoaded = false;              /* 下次展开重新拉一次 */
+    } else {
+      toast(txt || '已保存，设备重启中…', 'ok', 0);
+    }
+  } catch (e) {
+    toast('保存失败：' + e.message, 'err', 0);
+  }
+  wfPending = 0;
+  btn.disabled = false;
+  btn.textContent = '保存并重启';
+});
+const lGrad = $('lGrad'), rGrad = $('rGrad'), lPeak = $('lPeak'), rPeak = $('rPeak');
+const lVal = $('lVal'), rVal = $('rVal');
+const chanBox = $('channels');
+
+let ws = null, retry = 0, retryTimer = null, chMeta = null;
+let bridgeOn = false;                /* 桥接服务是否开启（由 applyState 更新） */
+let safeMode = false;                /* 安全模式（由 applyState 更新） */
+const dragging = {}, holdTimer = {};
+const lv = { l: { d: -96, f: 0, p: 0 }, r: { d: -96, f: 0, p: 0 } };
+
+$('hostText').textContent = location.host || '—';
+
+/* ---------- 格式化 ---------- */
+function fmtDb(db) { return db <= -95.5 ? '−∞ dB' : (db > 0 ? '+' : '') + db.toFixed(1) + ' dB'; }
+
+function fmtValHTML(c, v) {
+  if (c.unit === '%') return '<i class="num">' + Math.round(v) + '</i><i class="unit">%</i>';
+  return (v > 0 ? '+' : '') + v.toFixed(1) + '<i class="unit"> dB</i>';
+}
+
+/* 与硬件屏幕一致：frac = 10^(db/60)，-18dB 落在条中央 */
+function frac(db) {
+  if (db <= -60) return 0;
+  const f = Math.pow(10, db / 60);
+  return f > 1 ? 1 : f;
+}
+
+/* ---------- 音量通道 ---------- */
+function setTrackP(inp) {
+  const mn = +inp.min, mx = +inp.max, v = +inp.value;
+  inp.style.setProperty('--p', (((v - mn) / (mx - mn)) * 100).toFixed(2) + '%');
+}
+
+/* 音量通道 */
+let chanEls = [];        /* i → 该通道的 .chan 元素。三个音调现在被 .tones 包了一层，
+                            所以不能再用 chanBox.children[i]（那样会拿到 .tones 本身）。 */
+function renderChannels(ch) {
+  chanBox.innerHTML = '';
+  chanEls = [];
+  const tones = document.createElement('div');
+  tones.className = 'tones';
+  let hasTones = false;
+  ch.forEach((c, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'chan' + (c.unit === '%' ? ' hero' : '');
+    const top = document.createElement('div');
+    top.className = 'ctop';
+    const nm = document.createElement('span');
+    nm.className = 'cname';
+    nm.textContent = c.name;
+    const vv = document.createElement('span');
+    vv.className = 'cval';
+    vv.id = 'cv' + i;
+    vv.innerHTML = fmtValHTML(c, c.value);
+    top.append(nm, vv);
+
+    const inp = document.createElement('input');
+    inp.type = 'range';
+    inp.min = c.min; inp.max = c.max; inp.step = c.step; inp.value = c.value;
+    inp.addEventListener('input', () => {
+      dragging[i] = true;
+      clearTimeout(holdTimer[i]);
+      holdTimer[i] = setTimeout(() => { dragging[i] = false; }, 450);
+      vv.innerHTML = fmtValHTML(c, parseFloat(inp.value));
+      setTrackP(inp);
+      sendSet(i, parseFloat(inp.value));
+    });
+    wrap.append(top, inp);
+    chanEls[i] = wrap;
+    if (c.unit === '%') {
+      chanBox.append(wrap);            /* 总音量自己独占一行 */
+    } else {
+      tones.append(wrap);              /* 低/高/中 并排 */
+      hasTones = true;
+    }
+    setTrackP(inp);
+  });
+  if (hasTones) chanBox.append(tones);
+  chMeta = ch;
+}
+
+function updateChannels(ch, sel) {
+  /* 通道名也可能变（绑定到了别的模块），名字变了就得整体重建 */
+  const nameChanged = !chMeta || chMeta.length !== ch.length ||
+    ch.some((c, i) => chMeta[i] && chMeta[i].name !== c.name);
+  if (nameChanged) renderChannels(ch);
+  chMeta = ch;
+  ch.forEach((c, i) => {
+    const wrap = chanEls[i];
+    if (!wrap) return;
+    wrap.classList.toggle('sel', sel === i);
+    const inp = wrap.querySelector('input');
+    const vv = $('cv' + i);
+    if (!dragging[i] && document.activeElement !== inp) {
+      inp.value = c.value;
+      setTrackP(inp);
+      if (vv) vv.innerHTML = fmtValHTML(c, c.value);
+    }
+  });
+}
+
+/* ---------- 服务器状态 ---------- */
+function applyState(s) {
+  const br = s.bridge || {};
+  applyBridge(br);
+  applyImage(s.dspimg);
+  applyWifiLink(s.wifi);
+  if (s.graph) gpApplyDevice(s.graph);
+  if (s.bind) bindFromState(s.bind);
+  /* 桥接期间日志照常推送（曾经暂停过，现已恢复；桥接时单帧日志上限更小）。
+     这里只给日志状态加一句说明。 */
+  window.__bridging = !!s.bridging;
+
+  /*
+   * 电平表的数据源是本地控制。
+   *   - 桥接服务开启 → DSP 交给 SigmaStudio，本地电平/音量全部停止
+   *   - 本地控制关闭 → 设备不访问 I2C，电平读不到
+   * 两种情况都必须明确告知原因，否则看起来像坏了。
+   */
+  const brOn = !!br.enabled;
+  bridgeOn = brOn;                     /* 供 sendSet() 判断是否该发音量命令 */
+  const localOff = !brOn && (br.local_control === false);
+
+  $('lvWarnBridge').hidden = !brOn;
+  $('lvWarnLocal').hidden  = !localOff;
+  $('lvHint').textContent = brOn ? '不可用 · 桥接服务已开启'
+                                 : (localOff ? '不可用 · 本地控制已关闭'
+                                             : '峰值保持 · 实时');
+
+  /* 安全模式：开启后上电不写 DSP，本地音量调节也禁止（防写旧地址爆音） */
+  safeMode = !!s.safe;
+  if ($('safeToggle').checked !== safeMode) $('safeToggle').checked = safeMode;
+  $('safePill').classList.toggle('on', safeMode);
+  $('safeText').textContent = safeMode ? '安全模式·开' : '安全模式';
+
+  /* 音量卡：桥接 / 安全模式期间禁止调节，并直接禁用滑块 */
+  const volLocked = brOn || safeMode;
+  $('volWarn').hidden = !brOn;
+  $('volHint').textContent = brOn ? '已暂停 · 桥接服务开启'
+                           : safeMode ? '已暂停 · 安全模式（上电不写 DSP）'
+                                      : '实时同步 DSP';
+  chanBox.querySelectorAll('input[type=range]').forEach(el => { el.disabled = volLocked; });
+
+  const on = !!s.dsp;
+  /*
+   * 顶部状态胶囊。判定顺序必须与设备端一致：
+   *   桥接服务开启 → SigmaStudio 托管（无论有没有客户端）
+   *   本地控制关闭 → 本地控制已关闭（橙色，与"调试中"的青色区分开）
+   */
+  if (brOn) {
+    dspPill.className = 'pill bridge';
+    dspText.textContent = br.client ? 'SigmaStudio 调试中' : '桥接服务已开启';
+  } else if (br.local_control === false) {
+    dspPill.className = 'pill warn';
+    dspText.textContent = '本地控制已关闭';
+  } else {
+    dspPill.className = 'pill ' + (on ? 'ok' : 'bad');
+    dspText.textContent = on ? 'DSP 在线' : 'DSP 离线';
+  }
+
+  const L = s.level || {};
+  const l = typeof L.l === 'number' ? L.l : -96;
+  const r = typeof L.r === 'number' ? L.r : -96;
+  lv.l.d = l; lv.r.d = r;
+  lVal.textContent = fmtDb(l);
+  rVal.textContent = fmtDb(r);
+
+  if (s.ch) updateChannels(s.ch, typeof s.sel === 'number' ? s.sel : -1);
+}
+
+function sendSet(idx, value) {
+  /* 桥接服务开启 / 安全模式时设备会拒绝写入，所以干脆不发，避免滑块来回跳 */
+  if (bridgeOn || safeMode) return;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ cmd: 'set', idx: idx, value: value }));
+  }
+}
+
+/* ---------- 安全模式开关 ---------- */
+$('safeToggle').addEventListener('change', async () => {
+  const on = $('safeToggle').checked;
+  try {
+    await postJSON('/api/safe', { on: on });
+    safeMode = on;
+    $('safePill').classList.toggle('on', on);
+    $('safeText').textContent = on ? '安全模式·开' : '安全模式';
+    toast(on ? '安全模式已开启：上电不再写 DSP 参数'
+             : '安全模式已关闭：下次上电写入固件默认音量', 'ok');
+  } catch (e) {
+    toast('设置失败：' + e.message, 'err', 4000);
+    $('safeToggle').checked = safeMode;   /* 失败回滚 */
+  }
+});
+
+/* ---------- 电平动画（VU 弹道 + 峰值保持线） ---------- */
+const ATTACK = 0.34, RELEASE = 0.11, PEAK_FALL = 0.0022;
+function animate() {
+  ['l', 'r'].forEach((k, i) => {
+    const s = lv[k];
+    const t = frac(s.d);
+    s.f += (t - s.f) * (t > s.f ? ATTACK : RELEASE);
+    if (s.f < 0.0006 && t === 0) s.f = 0;
+    if (s.p < s.f) s.p = s.f; else s.p = Math.max(s.f, s.p - PEAK_FALL);
+    (i ? rGrad : lGrad).style.clipPath = 'inset(0 ' + ((1 - s.f) * 100).toFixed(2) + '% 0 0)';
+    (i ? rPeak : lPeak).style.left = Math.min(99.7, s.p * 100).toFixed(2) + '%';
+  });
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+/* ---------- WebSocket（断线指数退避重连） ---------- */
+function setLink(kind, text) { linkPill.className = 'pill ' + kind; linkText.textContent = text; }
+
+function connect() {
+  clearTimeout(retryTimer);
+  setLink('', '连接中…');
+  try { ws = new WebSocket('ws://' + location.host + '/ws'); } catch (e) { scheduleRetry(); return; }
+  ws.onopen = () => { retry = 0; setLink('ok', '已连接'); resubscribeLog(); };
+  ws.onmessage = (e) => {
+    let m;
+    try { m = JSON.parse(e.data); } catch (_) { return; }
+    /* 日志与状态在同一帧里（设备端同一 socket 不能并发发两帧） */
+    if (typeof m.log === 'string' && m.log.length) appendLog(m.log);
+    /* 只有真正的状态帧才更新界面，避免日志帧把状态清成默认值 */
+    if (m.bridge !== undefined || m.ch !== undefined) applyState(m);
+  };
+  ws.onclose = () => { setLink('bad', '已断开'); scheduleRetry(); };
+  ws.onerror = () => { try { ws.close(); } catch (_) {} };
+}
+function scheduleRetry() {
+  retryTimer = setTimeout(connect, Math.min(6000, 700 * Math.pow(1.5, retry++)));
+}
+
+/* ---------- OTA（带上传进度） ---------- */
+const drop = $('drop'), fwFile = $('fwFile'), otaBtn = $('otaBtn');
+const otaBar = $('otaBar'), otaFill = $('otaFill');
+const DROP_IDLE = '点击或拖入 .bin 固件<small>上传完成后设备自动重启</small>';
+
+drop.addEventListener('click', () => fwFile.click());
+['dragenter', 'dragover'].forEach(ev =>
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev =>
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+drop.addEventListener('drop', e => {
+  if (e.dataTransfer && e.dataTransfer.files.length) { fwFile.files = e.dataTransfer.files; onPick(); }
+});
+fwFile.addEventListener('change', onPick);
+
+function onPick() {
+  const f = fwFile.files[0];
+  $('dropText').innerHTML = f
+    ? f.name + '<small>' + (f.size / 1024).toFixed(0) + ' KB · 点击重新选择</small>'
+    : DROP_IDLE;
+}
+
+otaBtn.addEventListener('click', () => {
+  const f = fwFile.files[0];
+  if (!f) { toast('请先选择 .bin 固件文件', 'err'); return; }
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/ota');
+  otaBtn.disabled = true;
+  otaBar.classList.add('on');
+  otaFill.style.width = '0%';
+  otaBtn.textContent = '上传中 0%';
+  toast('上传中，请勿断电…', 'info', 0);
+
+  xhr.upload.onprogress = (e) => {
+    if (!e.lengthComputable) return;
+    const p = e.loaded / e.total;
+    otaFill.style.width = (p * 100).toFixed(1) + '%';
+    otaBtn.textContent = '上传中 ' + Math.round(p * 100) + '%';
+  };
+  xhr.onload = () => {
+    const ok = xhr.status >= 200 && xhr.status < 300;
+    otaFill.style.width = '100%';
+    toast((xhr.responseText || (ok ? 'OTA 成功' : 'OTA 失败')).trim(), ok ? 'ok' : 'err', 0);
+    otaBtn.disabled = false;
+    otaBtn.textContent = '上传并升级';
+    setTimeout(() => otaBar.classList.remove('on'), 1500);
+  };
+  xhr.onerror = () => {
+    toast('上传失败，请检查连接后重试', 'err');
+    otaBtn.disabled = false;
+    otaBtn.textContent = '上传并升级';
+    otaBar.classList.remove('on');
+  };
+  xhr.send(f);
+});
+
+/* ---------- Toast ---------- */
+let toastTimer = null;
+function toast(msg, kind, ms) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (kind || '');
+  clearTimeout(toastTimer);
+  if (ms !== 0) {
+    toastTimer = setTimeout(() => { t.className = 'toast ' + (kind || ''); }, ms || 3200);
+  }
+}
+
+/* ================= SigmaStudio 桥接 ================= */
+let brPending = 0;          /* 提交设置后的短时保护，避免被 100ms 状态推送覆盖 */
+
+function fmtKB(n) {
+  n = n || 0;
+  return n >= 1024 ? (n / 1024).toFixed(1) + ' KB' : n + ' B';
+}
+
+function fmtUs(us) {
+  if (!us) return '0';
+  return us < 1000 ? (us + ' µs') : ((us / 1000).toFixed(2) + ' ms');
+}
+
+function hex4(n) { return '0x' + n.toString(16).toUpperCase().padStart(4, '0'); }
+
+async function postJSON(url, obj) {
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(obj)
+  });
+  const t = (await r.text()).trim();
+  let j = null;
+  try { j = JSON.parse(t); } catch (_) {}
+  if (!r.ok) throw new Error((j && (j.msg || j.error)) || t || ('HTTP ' + r.status));
+  return j || {};
+}
+
+function applyBridge(b, force) {
+  if (!b) return;
+  if (force || Date.now() > brPending) {
+    $('brEnable').checked = !!b.enabled;
+    $('brVerbose').checked = !!b.verbose;
+    $('brLocal').checked = !!b.local_control;
+    if (document.activeElement !== $('brGap')) {
+      $('brGap').value = (b.resp_gap_us === undefined ? 30000 : b.resp_gap_us);
+    }
+    if (document.activeElement !== $('brPort')) $('brPort').value = b.port;
+  }
+
+  $('brRun').textContent = b.running ? ('监听中 · 端口 ' + b.port) : '已停止';
+  $('brClient').textContent = b.client ? ('已连接 · ' + (b.ip || '?')) : '未连接';
+  $('brStat').textContent = '写 ' + b.pkt_write + ' · 读 ' + b.pkt_read +
+                            ' · 错误 ' + b.errors + ' · ' + fmtKB(b.bytes);
+  /* 连接次数持续增长 = SigmaStudio 在反复重连（崩溃前兆）；
+     重同步字节数 > 0 = 流真的错位过，是协议层的确凿证据。 */
+  $('brConn').textContent = b.conn_count + ' 次'
+    + (b.conn_count > 1 ? '（偏多，留意重连）' : '');
+  $('brConn').className = 'v' + (b.conn_count > 3 ? ' warn' : '');
+  /* 当前连接数：SigmaStudio 开多个实时面板时会同时开多条连接，
+     旧固件只能服务一条（第二条永远没响应 → 它超时崩溃）。 */
+  const act = b.active || 0;
+  $('brActive').textContent = act + ' 条' + (act > 1 ? '（多连接，正常）' : '');
+  $('brActive').className = 'v' + (act > 1 ? ' warn' : (act > 0 ? '' : ''));
+  $('brSync').textContent = b.resync_bytes > 0
+    ? (b.resync_bytes + ' 字节（流曾错位！）') : '0 字节';
+  $('brSync').className = 'v' + (b.resync_bytes > 0 ? ' bad' : '');
+  $('brLast').textContent = b.last_len
+    ? ((b.last_is_read ? '读 ' : '写 ') + hex4(b.last_addr) + ' · ' + b.last_len + ' 字节')
+    : '—';
+  if (b.lat_avg || b.lat_last) {
+    $('brLat').textContent = '均 ' + fmtUs(b.lat_avg) + ' · 最大 ' + fmtUs(b.lat_max) +
+                             '（I2C 最大 ' + fmtUs(b.i2c_max) + '）';
+    $('brJit').textContent = b.jitter10 > 0
+      ? (b.jitter10 + ' 次 / 共 ' + b.pkt_read + ' 次读')
+      : ('0 次 / 共 ' + b.pkt_read + ' 次读');
+    $('brJit').className = b.jitter10 > 0 ? 'v warn' : 'v';
+  } else {
+    $('brLat').textContent = '—';
+    $('brJit').textContent = '—';
+    $('brJit').className = 'v';
+  }
+  $('brSummary').textContent = b.client ? ('已连接 ' + (b.ip || ''))
+                             : (b.running ? ('监听 ' + b.port) : '未启用');
+}
+
+async function saveBridge() {
+  brPending = Date.now() + 1500;
+  try {
+    const j = await postJSON('/api/bridge', {
+      enabled: $('brEnable').checked,
+      local_control: $('brLocal').checked,
+      verbose: $('brVerbose').checked,
+      resp_gap_us: Number($('brGap').value) || 0,
+      port: parseInt($('brPort').value, 10) || 8086
+    });
+    brPending = 0;
+    applyBridge(j, true);
+    toast('桥接设置已保存', 'ok');
+  } catch (e) {
+    brPending = 0;
+    toast('设置失败：' + e.message, 'err', 0);
+  }
+}
+
+['brEnable', 'brVerbose', 'brLocal'].forEach(id =>
+  $(id).addEventListener('change', saveBridge));
+/* 端口 / 应答间隔：输入框右侧的「应用」按钮，或直接按回车 */
+$('brPortApply').addEventListener('click', saveBridge);
+$('brGapApply').addEventListener('click', saveBridge);
+['brPort', 'brGap'].forEach(id => $(id).addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); saveBridge(); }
+}));
+
+/* ================= DSP 程序映像 ================= */
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* 本次开机自动加载的结果。注意这是**持续监控**的状态：
+ * wait/settle = 在等 1452 上线/就绪，ok = 已推送（1452 掉线后会自动回到 wait）。 */
+function applyBootResult(b) {
+  const el = $('imgBootRes');
+  if (!b) { el.textContent = '—'; el.className = 'v'; return; }
+  const secs = (typeof b.uptime_ms === 'number')
+    ? ' · 开机 ' + (b.uptime_ms / 1000).toFixed(1) + 's' : '';
+  if (b.state === 'ok') {
+    el.textContent = (b.msg || '已推送') + secs;
+    el.className = 'v';
+  } else if (b.state === 'wait' || b.state === 'settle') {
+    el.textContent = (b.msg || '等待中…') +
+                     (b.attempts ? '（已推 ' + b.attempts + ' 次）' : '');
+    el.className = 'v warn';
+  } else if (b.state === 'fail') {
+    el.textContent = (b.msg || '失败') + secs;
+    el.className = 'v bad';
+  } else {
+    el.textContent = b.msg || '—';
+    el.className = 'v';
+  }
+}
+
+/*
+ * 槽位列表：只在内容真的变了才重建 DOM。
+ *
+ * ⚠️ 必须这样 —— 状态帧 100ms 推一次，如果每次都赋 innerHTML，整个列表的
+ * 元素会被反复销毁重建，鼠标悬停的按钮状态跟着反复丢失，看起来就是
+ * "按钮一直闪动、很难点中"（鼠标按下到抬起之间元素已经被换掉了）。
+ */
+let slotHtmlCache = '';
+function renderSlots(slots, bootIdx) {
+  const box = $('imgSlots');
+  if (!slots.length) {
+    if (slotHtmlCache !== 'x') {
+      slotHtmlCache = 'x';
+      box.innerHTML = '<div class="slotempty">（设备未返回槽位信息）</div>';
+    }
+    return;
+  }
+  let html = '';
+  slots.forEach(s => {
+    const nm = s.name || ('固件 ' + (s.index + 1));
+    const sub = s.valid
+      ? ('序号 ' + s.seq + ' · ' + fmtKB(s.bytes))
+      : '空槽位（保存新固件时优先用这里）';
+    html += '<div class="slotrow' + (s.valid ? '' : ' empty') +
+              (bootIdx === s.index ? ' boot' : '') + '">' +
+              '<div class="smeta"><div class="sname">' + esc(nm) + '</div>' +
+              '<div class="ssub">' + esc(sub) +
+              (bootIdx === s.index ? ' · <b>开机推送</b>' : '') + '</div></div>' +
+              '<div class="sbtns">' +
+                '<button class="btn ghost" data-act="rename" data-slot="' + s.index + '">重命名</button>' +
+                '<button class="btn ghost" data-act="boot" data-slot="' + s.index + '"' +
+                  (s.valid ? '' : ' disabled') + '>设为开机</button>' +
+                '<button class="btn ghost" data-act="load" data-slot="' + s.index + '"' +
+                  (s.valid ? '' : ' disabled') + '>加载</button>' +
+                '<button class="btn ghost" data-act="del" data-slot="' + s.index + '"' +
+                  (s.valid ? '' : ' disabled') + '>删除</button>' +
+              '</div></div>';
+  });
+  if (html !== slotHtmlCache) {
+    slotHtmlCache = html;
+    box.innerHTML = html;
+  }
+}
+
+/* 「开机推送」下拉框：同样只在选项集变化时重建，否则下拉框会被关上 */
+let bootOptHtmlCache = '';
+/* 录制按钮上一次的 UI 状态（'rec' / 'stopped' / 'idle'） */
+let lastRecUi = null;
+
+function applyImage(img) {
+  if (!img) return;
+  window.__img = img;                 /* 槽位按钮的事件委托要用到 */
+  const r = img.ram || {}, f = img.flash || {};
+  const slots = img.slots || [];
+  const bootIdx = (typeof img.boot === 'number') ? img.boot : -1;
+  const nValid = slots.filter(s => s.valid).length;
+
+  /* 录制按钮：只在状态真的变化时改，避免每 100ms 无谓地重建 DOM */
+  const recUi = r.recording ? 'rec' : (r.valid ? 'stopped' : 'idle');
+  if (recUi !== lastRecUi) {
+    lastRecUi = recUi;
+    if (r.recording) {
+      $('imgRec').innerHTML = '<span style="color:var(--accent2)">● 录制中…</span>';
+      $('imgRecBtn').textContent = '停止录制';
+      $('imgRecBtn').classList.remove('ghost');
+    } else {
+      $('imgRec').textContent = r.valid ? '已停止（有录制内容）' : '未录制';
+      $('imgRecBtn').textContent = r.valid ? '重新录制' : '开始录制';
+      $('imgRecBtn').classList.add('ghost');
+    }
+  }
+
+  $('imgRam').textContent = r.valid
+    ? (r.regs + ' 个寄存器 · ' + r.exts + ' 个内存区段 · ' + fmtKB(r.bytes) +
+       (r.has_program ? ' · 含程序 RAM' : ' · 缺程序 RAM'))
+    : '空（先点「开始录制」再下载程序）';
+  $('imgFlash').textContent = f.valid
+    ? (nValid + ' 份 · 最新序号 ' + f.seq)
+    : '无';
+  $('imgSummary').textContent = r.recording ? '录制中'
+                              : (f.valid ? (nValid + ' 份已保存')
+                              : (r.valid ? (r.has_program ? '已录制，未保存' : '录制不完整') : '无'));
+
+  /* 上电自动加载开关 + 开机推送下拉 */
+  if (document.activeElement !== $('imgAuto')) $('imgAuto').checked = !!img.auto;
+  if (document.activeElement !== $('imgSettle') && typeof img.settle_ms === 'number') {
+    $('imgSettle').value = img.settle_ms;
+  }
+  const sel = $('imgBoot');
+  let opt = '<option value="-1">不推送</option>';
+  slots.forEach(s => {
+    opt += '<option value="' + s.index + '">' +
+           esc('槽位 ' + (s.index + 1) + ' · ' + (s.name || '未命名') +
+               (s.valid ? '' : '（空）')) + '</option>';
+  });
+  if (opt !== bootOptHtmlCache && document.activeElement !== sel) {
+    bootOptHtmlCache = opt;
+    sel.innerHTML = opt;
+  }
+  if (document.activeElement !== sel) sel.value = String(bootIdx);
+
+  applyBootResult(img.boot_result);
+  renderSlots(slots, bootIdx);
+
+  $('imgSave').disabled = !r.valid || !r.has_program;
+  $('imgErase').disabled = !f.valid;
+  $('imgDownload').disabled = !(r.valid || f.valid);
+}
+
+/* 统一入口：body 是完整的动作对象 */
+async function imgAction(body) {
+  try {
+    const j = await postJSON('/api/dspimg', body);
+    applyImage(j);
+    toast(j.msg || '完成', j.ok ? 'ok' : 'err', j.ok ? 3200 : 0);
+  } catch (e) {
+    toast('失败：' + e.message, 'err', 0);
+  }
+}
+
+$('imgRecBtn').addEventListener('click', () => {
+  imgAction({ action: $('imgRecBtn').textContent.indexOf('停止') >= 0
+                       ? 'record_stop' : 'record_start' });
+});
+$('imgSave').addEventListener('click', () => imgAction({ action: 'save' }));
+$('imgClear').addEventListener('click', () => imgAction({ action: 'clear' }));
+$('imgErase').addEventListener('click', () => {
+  if (confirm('清除 flash 里全部 4 个槽位的映像？')) imgAction({ action: 'erase' });
+});
+$('imgDownload').addEventListener('click', () => { location.href = '/api/dspimg/download'; });
+
+$('imgAuto').addEventListener('change', () =>
+  imgAction({ action: 'set_auto', on: $('imgAuto').checked }));
+$('imgBoot').addEventListener('change', () =>
+  imgAction({ action: 'set_boot', slot: parseInt($('imgBoot').value, 10) }));
+
+/* 就绪等待时间：输入框右侧的「应用」按钮，或直接按回车 */
+function applySettle(ms) {
+  const v = Math.max(0, Math.min(5000, ms | 0));
+  $('imgSettle').value = v;
+  imgAction({ action: 'set_settle', ms: v });
+}
+$('imgSettleApply').addEventListener('click', () =>
+  applySettle(parseInt($('imgSettle').value, 10) || 0));
+$('imgSettle').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    applySettle(parseInt($('imgSettle').value, 10) || 0);
+  }
+});
+
+/* 槽位按钮用事件委托，列表重绘后不用重新绑定 */
+$('imgSlots').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button[data-act]');
+  if (!btn) return;
+  const slot = parseInt(btn.dataset.slot, 10);
+  const img = window.__img || {};
+  const cur = (img.slots || [])[slot] || {};
+  const act = btn.dataset.act;
+
+  if (act === 'rename') {
+    const nm = prompt('给这份固件起个名字（留空 = 清除名字，仅网页显示）', cur.name || '');
+    if (nm === null) return;
+    await imgAction({ action: 'rename', slot: slot, name: nm });
+  } else if (act === 'boot') {
+    await imgAction({ action: 'set_boot', slot: slot });
+  } else if (act === 'load') {
+    if (!confirm('把这个槽位的固件推送给 DSP？\n当前 DSP 里的程序会被覆盖。')) return;
+    await imgAction({ action: 'replay_slot', slot: slot });
+  } else if (act === 'del') {
+    if (!confirm('删除这个槽位的固件？')) return;
+    await imgAction({ action: 'erase_slot', slot: slot });
+  }
+});
+
+/* ================= 地址调试 ================= */
+function parseAddr(s) {
+  s = (s || '').trim();
+  const n = /^0x/i.test(s) ? parseInt(s, 16) : parseInt(s, 10);
+  return isNaN(n) ? 0 : (n & 0xFFFF);
+}
+
+$('dbgRead').addEventListener('click', async () => {
+  const len = Math.min(64, Math.max(1, parseInt($('dbgLen').value, 10) || 4));
+  try {
+    const r = await fetch('/api/dsp?addr=' + parseAddr($('dbgAddr').value) + '&len=' + len);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    let s = hex4(j.addr) + ' · ' + j.len + ' 字节\n' + j.hex;
+    if (j.f24 !== undefined) s += '\nraw ' + j.raw + '  8.24 = ' + j.f24.toFixed(6);
+    $('dbgOut').textContent = (j.ok ? '' : '[读取失败] ') + s;
+  } catch (e) {
+    $('dbgOut').textContent = '读取失败：' + e.message;
+  }
+});
+
+$('dbgWrite').addEventListener('click', async () => {
+  const v = ($('dbgVal').value || '').trim();
+  if (!v) { toast('请填写要写入的值', 'err'); return; }
+  const body = { addr: parseAddr($('dbgAddr').value) };
+  /* 判定规则：带 0x 前缀 / 含 a-f / 含空格或逗号分隔 → 十六进制字节串；纯数字 → 十进制 32 位 */
+  if (/^0x/i.test(v) || /[a-fA-F]/.test(v) || /[\s,]/.test(v)) {
+    body.hex = v;
+  } else {
+    body.value = parseInt(v, 10) >>> 0;
+  }
+  try {
+    const j = await postJSON('/api/dsp', body);
+    toast('已写入 ' + hex4(j.addr) + ' → ' + j.hex, 'ok');
+    $('dbgOut').textContent = hex4(j.addr) + ' 写入 ' + j.hex;
+  } catch (e) {
+    toast('写入失败：' + e.message, 'err', 0);
+  }
+});
+
+$('dbgReset').addEventListener('click', async () => {
+  if (!confirm('软复位 DSP？\n复位后 DSP 中的程序会丢失，需要重新加载映像或让 SigmaStudio 重新下载。')) return;
+  try {
+    const j = await postJSON('/api/dsp', { reset: true });
+    toast(j.msg || '已发送软复位', j.ok ? 'ok' : 'err', 0);
+  } catch (e) {
+    toast('软复位失败：' + e.message, 'err', 0);
+  }
+});
+
+/* ================= I2C 频率调优 ================= */
+
+function applyI2c(j) {
+  if (!j) return;
+  if (typeof j.hz === 'number' && document.activeElement !== $('i2cHz')) {
+    $('i2cHz').value = j.hz;
+  }
+  if (typeof j.pullup === 'boolean') $('i2cPullup').checked = j.pullup;
+  $('i2cOut').textContent = '当前 SCL ' + (j.hz || 0) + ' Hz · 内部上拉 ' +
+                            (j.pullup ? '开' : '关');
+}
+
+async function i2cCall(body) {
+  const r = await fetch('/api/i2c', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const t = (await r.text()).trim();
+  let j = {};
+  try { j = JSON.parse(t); } catch (_) {}
+  if (!r.ok) throw new Error(j.msg || t || ('HTTP ' + r.status));
+  applyI2c(j);
+  return j;
+}
+
+$('i2cRefresh').addEventListener('click', async () => {
+  try { applyI2c(await (await fetch('/api/i2c')).json()); }
+  catch (e) { toast('读取失败：' + e.message, 'err', 0); }
+});
+
+/* 卡片展开时自动拉一次当前状态 */
+$('dbgCard').addEventListener('toggle', () => {
+  if ($('dbgCard').open) $('i2cRefresh').click();
+});
+
+$('i2cSetHz').addEventListener('click', async () => {
+  const hz = parseInt($('i2cHz').value, 10);
+  if (!(hz >= 10000 && hz <= 1000000)) { toast('频率需在 10000~1000000 之间', 'err'); return; }
+  try {
+    await i2cCall({ hz: hz });
+    toast('SCL 已设为 ' + hz + ' Hz', 'ok');
+  } catch (e) { toast('设置失败：' + e.message, 'err', 0); }
+});
+
+[['i2c100k', 100000], ['i2c400k', 400000], ['i2c600k', 600000], ['i2c1m', 1000000]]
+  .forEach(([id, hz]) => $(id).addEventListener('click', async () => {
+    try {
+      $('i2cHz').value = hz;
+      await i2cCall({ hz: hz });
+      toast('SCL 已设为 ' + hz + ' Hz', 'ok');
+    } catch (e) { toast('设置失败：' + e.message, 'err', 0); }
+  }));
+
+$('i2cPullup').addEventListener('change', async () => {
+  try {
+    await i2cCall({ pullup: $('i2cPullup').checked });
+    toast('内部上拉已' + ($('i2cPullup').checked ? '开启' : '关闭（若总线失联请重启设备）'), 'ok');
+  } catch (e) { toast('设置失败：' + e.message, 'err', 0); }
+});
+
+/* 电平卡上的「去关闭桥接服务」：直接跳到工具页并展开桥接卡片 */
+$('lvGoTools').addEventListener('click', () => {
+  setPage('tools');
+  const card = $('bridgeCard');
+  if (card) card.open = true;          /* 直接展开桥接卡片，少一步操作 */
+  setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+});
+
+/*
+ * 电平卡上的「一键开启本地控制」。
+ * 电平表最容易被误解的地方就是这里：本地控制关了 → 设备不读 DSP → 电平永远是 -∞，
+ * 看起来像坏了。所以直接给个按钮，而不是让用户去工具页翻。
+ */
+$('lvEnableLocal').addEventListener('click', async () => {
+  const btn = $('lvEnableLocal');
+  btn.disabled = true;
+  btn.textContent = '开启中…';
+  try {
+    const cur = await (await fetch('/api/bridge')).json();
+    const j = await postJSON('/api/bridge', {
+      enabled: !!cur.enabled,
+      port: cur.port,
+      local_control: true,
+      verbose: !!cur.verbose,
+      resp_gap_us: (cur.resp_gap_us === undefined) ? 30000 : cur.resp_gap_us
+    });
+    applyBridge(j, true);
+    toast('本地控制已开启，电平随即可用', 'ok');
+    applyState(await (await fetch('/api/state')).json());
+  } catch (e) {
+    toast('开启失败：' + e.message, 'err', 0);
+  }
+  btn.disabled = false;
+  btn.textContent = '开启本地控制';
+});
+
+/* ================= 设备日志 ================= */
+const LOG_MAX = 400;                 /* 最多保留行数，防止长时间开启吃内存 */
+const logBox = $('logBox');
+let logLines = [];
+let logOn = false;
+
+/* 去掉 ANSI 颜色转义，并按日志级别着色 */
+function stripAnsi(s) { return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, ''); }
+
+function logClass(line) {
+  const m = line.match(/^\s*[EWIDV]\s*\(/);
+  if (!m) return '';
+  return { E: 'e', W: 'w', I: 'i', D: 'd', V: 'd' }[line.trim()[0]] || '';
+}
+
+function appendLog(text) {
+  text = stripAnsi(text);
+  /* 设备日志可能一次推来多行；末尾空行丢弃 */
+  const parts = text.split('\n');
+  if (parts.length && parts[parts.length - 1] === '') parts.pop();
+
+  const atBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 40;
+
+  if (logLines.length === 0) logBox.innerHTML = '';
+  for (const p of parts) {
+    logLines.push(p);
+    const sp = document.createElement('span');
+    sp.className = logClass(p);
+    sp.textContent = p + '\n';
+    logBox.appendChild(sp);
+  }
+  /* 超出上限时从头部裁剪（用文本节点整体删除，成本低） */
+  while (logLines.length > LOG_MAX) {
+    logLines.shift();
+    logBox.removeChild(logBox.firstChild);
+  }
+
+  if ($('logAuto').checked && atBottom) logBox.scrollTop = logBox.scrollHeight;
+  $('logInfo').textContent = window.__bridging
+    ? ('SigmaStudio 调试中 · ' + logLines.length + ' 行')
+    : ('实时 · ' + logLines.length + ' 行');
+}
+
+$('logOn').addEventListener('change', () => {
+  logOn = $('logOn').checked;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ cmd: 'log', on: logOn }));
+  }
+  if (logOn) {
+    logBox.innerHTML = '';
+    logLines = [];
+    $('logInfo').textContent = '等待日志…';
+  } else {
+    $('logInfo').textContent = '未开启';
+  }
+});
+
+$('logClear').addEventListener('click', async () => {
+  logBox.innerHTML = '';
+  logLines = [];
+  $('logInfo').textContent = logOn ? '等待日志…' : '未开启';
+  try { await postJSON('/api/log', {}); } catch (_) { /* 清本地即可 */ }
+});
+
+/* WS 每次（重）连上后都要重新订阅日志 */
+function resubscribeLog() {
+  if (logOn && ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ cmd: 'log', on: true }));
+  }
+}
+
+/* ============================================================
+ * 连线图：把 SigmaStudio 导出的工程文件画成信号流，并直接在方块上调参
+ *
+ * 三条前提（决定了为什么这么做）：
+ *  1. **不硬编码任何地址**。地址是 SigmaStudio 链接器分配的，改一次 DSP 程序
+ *     就整体平移。所有地址都从 *.params 解析，改程序后重新导入即可。
+ *  2. **图是只读的**。增删方块 / 改连线需要编译器（AD 的闭源核心），
+ *     所以这里只做「显示 + 调参」，拓扑改动仍然回 SigmaStudio 做。
+ *  3. **只允许写 .params 里识别出的参数地址**，绝不提供任意地址写入。
+ *
+ * 数据流：
+ *   NetList.xml → 方块(名字/类型/坐标/Growth) + 连线(Link id 配对)
+ *   *.params    → 参数(名称/地址/初值/字节)
+ *   两边靠**算法实例名**对齐（HWGainADAU145XAlg1 ↔ HWGainADAU145XAlg1target），
+ *   这比 cell 名更可靠 —— NetList 的属性值还带尾随空格。
+ * ============================================================ */
+
+const GP = {
+  nodes: [], links: [], params: [],
+  sel: -1,
+  auto: true,                 /* true = 自动分层排列；false = 用 SigmaStudio 坐标 */
+  vb: null,
+  live: new Map(),            /* addr → raw(uint32)，实时回读缓存 */
+  eqWords: new Map(),         /* addr → [5 words]，EQ 当前系数（写入后以它为准） */
+  dev: { netlist: { valid: false, len: 0, crc: 0 }, params: { valid: false, len: 0, crc: 0 } },
+  loaded: { netlist: 0, params: 0 },   /* 已解析文件的 CRC，用来避免重复解析 */
+  poll: null,
+  polling: false,             /* 轮询重入保护：上一轮没回来就不叠新的 */
+  bqOrder: 'auto',            /* EQ 系数顺序：auto / b0b1b2_a1a2 / b0b1b2_a2a1 */
+  busy: false
+};
+
+/* ---------- 数值小工具 ---------- */
+function gpU32(x) { return x >>> 0; }
+function gpS32(x) { x = x >>> 0; return x > 0x7FFFFFFF ? x - 0x100000000 : x; }
+function gpHex8(v) { return (v >>> 0).toString(16).toUpperCase().padStart(8, '0'); }
+function gpF824(x) { return gpS32(x) / 16777216; }
+function gpDb824(x) { const v = gpF824(x); return v <= 1e-9 ? -Infinity : 20 * Math.log10(v); }
+function gpClamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function gpEscRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function gpX(s) {                                   /* XML 文本转义 */
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function gpFmtDb(d) {
+  if (!isFinite(d)) return '−∞';
+  return (d > 0 ? '+' : '') + d.toFixed(1) + ' dB';
+}
+function gpFmtBytes(n) {
+  n = n || 0;
+  return n >= 1024 ? (n / 1024).toFixed(1) + ' KB' : n + ' B';
+}
+
+/*
+ * 文件 → 文本。
+ *  - `ignoreBOM:true` 很关键：SigmaStudio 导出的 *_NetList.xml **带 UTF-8 BOM**，
+ *    而 TextDecoder 默认会把 BOM 吃掉；我们再按 UTF-8 传回设备时就少了 3 字节，
+ *    设备上的长度/CRC 会和本地文件对不上（遇到过，排查很费解）。保留 BOM 才能字节一致。
+ *  - .params 在中文 Windows 上可能是 GBK；UTF-8 解出替换字符就回退 GBK。
+ */
+function gpDecode(buf) {
+  let t = new TextDecoder('utf-8', { fatal: false, ignoreBOM: true }).decode(buf);
+  if (t.indexOf('\uFFFD') >= 0) {
+    try { t = new TextDecoder('gbk', { ignoreBOM: true }).decode(buf); } catch (_) { /* 保持 UTF-8 结果 */ }
+  }
+  return t;
+}
+
+/* ================== 解析 NetList.xml ================== */
+function gpParseNetlist(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('NetList.xml 不是合法 XML');
+
+  const nodes = [];
+  const linkMap = new Map();          /* link id → {outs:[], ins:[]} */
+
+  Array.from(doc.querySelectorAll('Algorithm')).forEach((a, i) => {
+    const loc = a.getAttribute('location') || '';
+    const m = loc.match(/X\s*=\s*(-?[\d.]+)\s*,\s*Y\s*=\s*(-?[\d.]+)/);
+    /* ⚠️ NetList 的属性值**带尾随空格**（cell="Single 1 "），必须 trim */
+    const n = {
+      id: i,
+      name: (a.getAttribute('name') || '').trim(),
+      friendly: (a.getAttribute('friendlyname') || '').trim(),
+      cell: (a.getAttribute('cell') || '').trim(),
+      x: m ? parseFloat(m[1]) : 0,
+      y: m ? parseFloat(m[2]) : 0,
+      gw: parseInt(a.getAttribute('Growth') || '0', 10) || 0,
+      gb: parseInt(a.getAttribute('GrowthB') || '0', 10) || 0,
+      ins: [], outs: []
+    };
+    Array.from(a.querySelectorAll('Link')).forEach(l => {
+      const pin = (l.getAttribute('pin') || '').trim();
+      const dir = (l.getAttribute('dir') || '').trim();
+      const lid = (l.getAttribute('link') || '').trim();
+      const pm = pin.match(/_P(\d+)_/);
+      const p = { pin: pin, dir: dir, link: lid, n: pm ? +pm[1] : 0 };
+      if (dir === 'in') n.ins.push(p); else n.outs.push(p);
+      if (!linkMap.has(lid)) linkMap.set(lid, { outs: [], ins: [] });
+      linkMap.get(lid)[(dir === 'in') ? 'ins' : 'outs'].push({ node: i, p: p });
+    });
+    n.ins.sort((p, q) => p.n - q.n);
+    n.outs.sort((p, q) => p.n - q.n);
+    /*
+     * 记录端口在数组里的**序号**。
+     * ⚠️ 不能拿引脚编号 P 当序号用：同一个模块的端口是**稀疏编号**的，
+     * 例如 `Single 1` 的 in 是 P1/P3、out 是 P2/P4。
+     * 用 P 号算比例会把 `P3` 算成 (3+1)/(2+1)=1.33（方块下方外面）、
+     * `P4` 算成 1.67（更远）—— 表现就是大量连线“没接到模块上”。
+     */
+    n.ins.forEach((p, k) => { p.idx = k; });
+    n.outs.forEach((p, k) => { p.idx = k; });
+    nodes.push(n);
+  });
+
+  const links = [];
+  linkMap.forEach((v, lid) => {
+    v.outs.forEach(o => v.ins.forEach(t => {
+      /* 直接存端口对象：排序后它的 .idx 就是连接点位置 */
+      links.push({ link: lid, from: o.node, to: t.node,
+                   fromPort: o.p, toPort: t.p });
+    }));
+  });
+  return { nodes: nodes, links: links };
+}
+
+/* ================== 解析 *.params ==================
+ * 固定 6 行一块，块之间用空行分隔：
+ *   Cell Name = … / Parameter Name = … / Parameter Address = … /
+ *   Parameter Value = …（多字参数没有这一行）/ Parameter Data : / 若干 0x00,
+ */
+function gpParseParams(text) {
+  const out = [];
+  const blocks = text.split(/\n[ \t]*\r?\n/);
+  for (const b of blocks) {
+    const m = { cell: '', name: '', addr: -1, value: null, data: [] };
+    let inData = false;
+    for (const ln of b.split(/\r?\n/)) {
+      if (inData) {
+        const by = ln.match(/0x[0-9A-Fa-f]{2}/g);
+        if (by) for (const x of by) m.data.push(parseInt(x, 16));
+        continue;
+      }
+      if (/^\s*Parameter\s+Data\s*:/.test(ln)) { inData = true; continue; }
+      const kv = ln.match(/^\s*([A-Za-z][A-Za-z ]*?)\s*=\s*(.*?)\s*$/);
+      if (!kv) continue;
+      const k = kv[1].trim(), v = kv[2];
+      if (k === 'Cell Name') m.cell = v;
+      else if (k === 'Parameter Name') m.name = v;
+      else if (k === 'Parameter Address') m.addr = parseInt(v, 10);
+      else if (k === 'Parameter Value') m.value = parseFloat(v);
+    }
+    if (m.cell && isFinite(m.addr) && m.addr >= 0) {
+      if (m.data.length === 0) {
+        m.data = [0, 0, 0, 0];      /* 极少数条目没有 Parameter Data，顶一个 32 位字 */
+      }
+      m.words = Math.max(1, Math.round(m.data.length / 4));
+      out.push(m);
+    }
+  }
+  return out;
+}
+
+/* ================== 参数分类 ================== */
+function gpKind(cell, p) {
+  const nm = p.name || '';
+  const w = p.words || 1;
+  if (cell.indexOf('Framework') >= 0 || nm.indexOf('__') === 0) {
+    return { k: 'internal', w: w };      /* Safeload 等框架参数：不给看也不给写 */
+  }
+  if (/invert$/i.test(nm)) return { k: 'switch', w: w, hi: '反相', lo: '正相' };
+  if (/bypass$/i.test(nm)) return { k: 'switch', w: w, hi: '旁路', lo: '直通' };
+  if (/ison$/i.test(nm)) return { k: 'switch', w: w, hi: '开', lo: '关' };
+  if (/Targ_B2_\d+$/i.test(nm)) return { k: 'eq', w: w };
+  /* 只认「X」那个：LinX / X_lo 不算，否则一个检测器会冒出好几条电平 */
+  if (/LevelDet\w*S\d+X$/i.test(nm)) return { k: 'level', w: w };
+  if (/target$/i.test(nm) && w === 1) return { k: 'gain', w: w };
+  if (/gain$/i.test(nm)) return { k: (w === 1 ? 'gain' : 'mixgain'), w: w };
+  if (/value$/i.test(nm) && w === 1) return { k: 'dc', w: w };
+  return { k: 'raw', w: w };
+}
+
+/* 某个方块对应的参数：优先按**算法实例名**前缀，回落按 cell 名 */
+function gpParamsForNode(n) {
+  if (!n.name) return [];
+  let re = null;
+  try { re = new RegExp('^' + gpEscRe(n.name) + '(?![0-9])'); } catch (_) { re = null; }
+  const byName = re ? GP.params.filter(p => re.test(p.name)) : [];
+  if (byName.length) return byName;
+  return GP.params.filter(p => p.cell === n.cell);
+}
+
+/*
+ * 某个方块在面板上要展示的参数（已过滤 + 已排序）。
+ * ⚠️ 面板卡片的下标必须和这份顺序严格一致，所以只留这一个入口，
+ * 不要在别处再算一遍（曾经因为“排序前后不同”导致下标错位）。
+ */
+const GP_ORDER = { gain: 0, switch: 1, mixgain: 2, dc: 3, level: 4, eq: 5, raw: 6 };
+function gpNodeControls(n) {
+  const cs = gpParamsForNode(n).filter(p => gpKind(n.cell, p).k !== 'internal');
+  cs.sort((a, b) => {
+    const ka = gpKind(n.cell, a).k, kb = gpKind(n.cell, b).k;
+    return (GP_ORDER[ka] === undefined ? 9 : GP_ORDER[ka])
+         - (GP_ORDER[kb] === undefined ? 9 : GP_ORDER[kb]);
+  });
+  return cs;
+}
+
+/* ================== 布局 ================== */
+function gpLayout() {
+  const N = GP.nodes;
+  if (!N.length) return;
+
+  if (GP.auto) {
+    /* 最长路径分层（有环时靠迭代上限兜住），层内保持 SigmaStudio 的纵向次序 */
+    const layer = new Array(N.length).fill(0);
+    for (let it = 0; it < 60; it++) {
+      let ch = false;
+      for (const l of GP.links) {
+        if (layer[l.from] < 30 && layer[l.to] < layer[l.from] + 1) {
+          layer[l.to] = layer[l.from] + 1; ch = true;
+        }
+      }
+      if (!ch) break;
+    }
+    const byL = new Map();
+    N.forEach((n, i) => {
+      if (!byL.has(layer[i])) byL.set(layer[i], []);
+      byL.get(layer[i]).push(i);
+    });
+    const BW = 146, BH = 46, DX = 214, DY = 66;
+    byL.forEach((arr, L) => {
+      arr.sort((a, b) => (N[a].y - N[b].y) || (N[a].x - N[b].x));
+      /* 竖向居中，让每列看起来平衡 */
+      const maxRow = Math.max.apply(null, Array.from(byL.values()).map(v => v.length));
+      const off = (maxRow - arr.length) * DY / 2;
+      arr.forEach((i, k) => {
+        N[i].bw = BW; N[i].bh = BH;
+        N[i].bx = L * DX;
+        N[i].by = off + k * DY;
+      });
+    });
+    return;
+  }
+
+  /* SigmaStudio 坐标：以 location 为方块中心，宽度按端口数估。
+     ⚠️ 宽度系数是实测调出来的：网表里相邻方块的 X 间距主集中在 70~136，
+     取值偏大就会互相叠（曾经用 76+16*(np-1) 时出现 7 处重叠）。 */
+  N.forEach(n => {
+    const np = Math.max(1, Math.max(n.ins.length, n.outs.length));
+    n.bw = gpClamp(66 + 12 * (np - 1), 66, 150);
+    n.bh = 44;
+    n.bx = n.x - n.bw / 2;
+    n.by = n.y - n.bh / 2;
+  });
+}
+
+function gpBounds() {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  GP.nodes.forEach(n => {
+    x0 = Math.min(x0, n.bx); y0 = Math.min(y0, n.by);
+    x1 = Math.max(x1, n.bx + n.bw); y1 = Math.max(y1, n.by + n.bh);
+  });
+  if (x0 > x1) return { x: 0, y: 0, w: 100, h: 100 };
+  return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
+}
+
+/* ================== 渲染 ================== */
+/* 方块颜色分类：
+ *   rweq（亮绿）= 里面有可调的 EQ 段
+ *   rw  （绿）  = 有可调的电平/增益/开关
+ *   ro  （橙）  = 只读
+ * ⚠️ EQ 以前算只读（那段代码写在 EQ 可以写之前），所以滤波器方块显示成橙色；
+ *    EQ 写入打通之后必须归到可写，否则图上看起来“改不了”。 */
+function gpClassOfNode(n) {
+  const cs = gpParamsForNode(n);
+  let rw = false, ro = false, eq = false;
+  cs.forEach(p => {
+    const k = gpKind(n.cell, p).k;
+    if (k === 'gain' || k === 'switch' || k === 'mixgain') rw = true;
+    else if (k === 'eq') eq = true;
+    else if (k !== 'internal') ro = true;
+  });
+  if (eq) return 'rweq';
+  return rw ? 'rw' : (ro ? 'ro' : '');
+}
+
+function gpShortName(n, p) {
+  let s = p.name || '';
+  if (n.name && s.indexOf(n.name) === 0) s = s.slice(n.name.length);
+  s = s.replace(/^_+/, '');
+  return s || (p.name || '');
+}
+
+/* 某条连线在方块边上的连接点纵坐标。
+ * 多个端口在方块高度上均分；只有一个端口时正好在中线。 */
+function gpPortY(n, idx, isOut) {
+  const cnt = ((isOut ? n.outs.length : n.ins.length) || 1) + 1;
+  const k = (typeof idx === 'number' && idx >= 0) ? idx : 0;
+  return n.by + n.bh * (k + 1) / cnt;
+}
+
+function gpRender() {
+  const svg = $('gpSvg');
+  gpLayout();
+  const N = GP.nodes, L = GP.links;
+
+  if (!N.length) {
+    svg.innerHTML = '';
+    $('gpHint').textContent = '无数据';
+    return;
+  }
+  const bb = gpBounds();
+  const pad = 26;
+  GP.content = { x: bb.x - pad, y: bb.y - pad, w: bb.w + pad * 2, h: bb.h + pad * 2 };
+
+  let h = '';
+  /* 连线画在方块下层 */
+  h += '<g class="lns">';
+  for (const l of L) {
+    const a = N[l.from], b = N[l.to];
+    if (!a || !b) continue;
+    const ay = gpPortY(a, l.fromPort ? l.fromPort.idx : 0, true);
+    const by = gpPortY(b, l.toPort ? l.toPort.idx : 0, false);
+    const x1 = a.bx + a.bw, x2 = b.bx;
+    const dx = Math.max(24, Math.abs(x2 - x1) * 0.45);
+    const cls = (GP.sel >= 0 && (l.from === GP.sel || l.to === GP.sel)) ? 'ln hi' : 'ln';
+    h += '<path class="' + cls + '" d="M' + x1.toFixed(1) + ',' + ay.toFixed(1) +
+         ' C' + (x1 + dx).toFixed(1) + ',' + ay.toFixed(1) + ' ' +
+         (x2 - dx).toFixed(1) + ',' + by.toFixed(1) + ' ' +
+         x2.toFixed(1) + ',' + by.toFixed(1) + '"/>';
+  }
+  h += '</g>';
+
+  /* 端口圆点：把连线端点明明白白标在方块边上 */
+  h += '<g class="pdots">';
+  N.forEach(n => {
+    n.outs.forEach((p, k) => {
+      h += '<circle class="pdot" cx="' + (n.bx + n.bw).toFixed(1) + '" cy="' +
+           gpPortY(n, k, true).toFixed(1) + '" r="2.4"/>';
+    });
+    n.ins.forEach((p, k) => {
+      h += '<circle class="pdot" cx="' + n.bx.toFixed(1) + '" cy="' +
+           gpPortY(n, k, false).toFixed(1) + '" r="2.4"/>';
+    });
+  });
+  h += '</g>';
+
+  /* 方块 */
+  N.forEach((n, i) => {
+    const cls = 'nd ' + gpClassOfNode(n) + (GP.sel === i ? ' on' : '');
+    const title = n.cell || n.name;
+    h += '<g class="' + cls + '" data-i="' + i + '">';
+    h += '<rect x="' + n.bx.toFixed(1) + '" y="' + n.by.toFixed(1) +
+         '" width="' + n.bw.toFixed(1) + '" height="' + n.bh.toFixed(1) + '" rx="8"/>';
+    const tx = n.bx + 9;
+    const maxCh = Math.max(6, Math.floor((n.bw - 18) / 6.1));
+    const nm = title.length > maxCh ? title.slice(0, maxCh - 1) + '…' : title;
+    h += '<text x="' + tx.toFixed(1) + '" y="' + (n.by + 18).toFixed(1) + '">' + gpX(nm) + '</text>';
+    const sub = (n.friendly || '').replace(/\(|\)/g, '').trim();
+    const maxSub = Math.max(8, Math.floor((n.bw - 18) / 5.1));
+    const sb = sub.length > maxSub ? sub.slice(0, maxSub - 1) + '…' : sub;
+    h += '<text class="sub" x="' + tx.toFixed(1) + '" y="' + (n.by + 32).toFixed(1) + '">' + gpX(sb) + '</text>';
+    /* 电平方块画一条迷你电平条（data-w 存满宽，轮询时只改 width 不重绘整图） */
+    const lp = gpLevelParam(n);
+    if (lp) {
+      const bx = tx, by2 = n.by + n.bh - 10, bw = Math.max(10, n.bw - 18);
+      const lv = gpLevelFrac(lp.addr);
+      h += '<rect class="mbg" x="' + bx.toFixed(1) + '" y="' + by2.toFixed(1) +
+           '" width="' + bw.toFixed(1) + '" height="4" rx="2"/>';
+      h += '<rect class="mbar" data-w="' + bw.toFixed(1) + '" x="' + bx.toFixed(1) +
+           '" y="' + by2.toFixed(1) + '" width="' + (bw * (lv === null ? 0 : lv)).toFixed(1) +
+           '" height="4" rx="2"/>';
+    }
+    h += '</g>';
+  });
+
+  svg.innerHTML = h;
+  if (GP.vb) gpApplyVB();
+  else gpDefaultView();
+
+  const lvN = GP.nodes.filter(n => gpLevelParam(n)).length;
+  $('gpHint').textContent = GP.nodes.length + ' 个模块 · ' + GP.links.length + ' 条连线'
+    + (lvN ? ' · ' + lvN + ' 个电平' : '');
+}
+
+/* 该方块里的电平参数（没有则 null） */
+function gpLevelParam(n) {
+  for (const p of gpParamsForNode(n)) {
+    if (gpKind(n.cell, p).k === 'level') return p;
+  }
+  return null;
+}
+
+/* 电平的 0..1 归一（与硬件屏幕一致：frac = 10^(dB/60)） */
+function gpLevelFrac(addr) {
+  const raw = GP.live.get(addr);
+  if (raw === undefined) return null;
+  let q = raw & 0xFFFF;
+  if (q > 32767) q -= 65536;               /* X 是 Q15（存 32 位参数的低 16 位） */
+  const v = q / 32768;
+  return gpClamp(Math.pow(10, (20 * Math.log10(Math.max(v, 1e-6))) / 60), 0, 1);
+}
+
+function gpLevelDb(addr) {
+  const raw = GP.live.get(addr);
+  if (raw === undefined) return null;
+  let q = raw & 0xFFFF;
+  if (q > 32767) q -= 65536;
+  const v = q / 32768;
+  return v <= 1e-6 ? -Infinity : 20 * Math.log10(v);
+}
+
+function gpApplyVB() {
+  if (!GP.vb) return;
+  const v = GP.vb;
+  $('gpSvg').setAttribute('viewBox',
+    v.x.toFixed(1) + ' ' + v.y.toFixed(1) + ' ' + v.w.toFixed(1) + ' ' + v.h.toFixed(1));
+}
+
+function gpFit() {
+  if (!GP.content) return;
+  GP.vb = { x: GP.content.x, y: GP.content.y, w: GP.content.w, h: GP.content.h };
+  GP.vbValid = true;
+  gpApplyVB();
+}
+
+/*
+ * 视口尺寸变了（全屏切换、窗口缩放）时把 viewBox 重新对齐到新尺寸。
+ * 约定是「1 个内容单位 = 1 个 CSS 像素」，所以 viewBox 的 w/h 必须等于视口尺寸，
+ * 否则 svg 会按 preserveAspectRatio 做 letterbox，滚轮缩放的坐标换算就偏了。
+ * 保留原先看的中心点，避免一切换就迷路。
+ */
+function gpRefitView() {
+  const r = $('gpWrap').getBoundingClientRect();
+  const vw = Math.max(240, r.width || 480), vh = Math.max(180, r.height || 340);
+  if (GP.vb && GP.vbValid) {
+    const cx = GP.vb.x + GP.vb.w / 2, cy = GP.vb.y + GP.vb.h / 2;
+    GP.vb = { x: cx - vw / 2, y: cy - vh / 2, w: vw, h: vh };
+  } else {
+    gpDefaultView();
+    return;
+  }
+  GP.vbValid = true;
+  gpApplyVB();
+}
+
+/* ---------- 连线图网页全屏 ---------- */
+let gpFs = false;
+
+function gpSetFull(on) {
+  const card = $('gpFlowCard');
+  if (!card) return;
+  gpFs = !!on;
+  card.classList.toggle('gpfull', gpFs);
+  document.documentElement.classList.toggle('gpfs', gpFs);
+  const b = $('gpFull');
+  if (b) {
+    b.textContent = gpFs ? '⛶ 退出全屏' : '⛶ 全屏';
+    b.title = gpFs ? '退出全屏（或按 Esc）' : '把连线图铺满整个窗口';
+  }
+  /* 等布局生效再量尺寸 */
+  requestAnimationFrame(() => { gpRefitView(); });
+  setTimeout(() => { gpRefitView(); gpPollNow(); }, 120);
+}
+
+/*
+ * 默认视图：**可读优先**（1 个内容单位 = 1 个 CSS 像素），而不是把整张图塞进屏幕。
+ *
+ * 为什么不用「适配全部」当默认：这张 2.1 工程的信号链很长（十几级），
+ * 一屏适配后缩放比会降到 0.2 左右，字完全看不清 —— 那样图就白画了。
+ * 现在的做法是保持 1:1，从左端（信号入口）开始，横向靠拖/滚浏览，
+ * 想纵览全貌再点「适配」。
+ */
+function gpDefaultView() {
+  const c = GP.content;
+  if (!c) return;
+  const r = $('gpWrap').getBoundingClientRect();
+  const vw = Math.max(240, r.width || 480);
+  const vh = Math.max(180, r.height || 340);
+  /* 内容比视口小就居中，否则贴左、竖向居中 */
+  const x = (c.w <= vw) ? (c.x + c.w / 2 - vw / 2) : c.x;
+  const y = (c.h <= vh) ? (c.y + c.h / 2 - vh / 2) : c.y;
+  GP.vb = { x: x, y: y, w: vw, h: vh };
+  /* ⚠️ 卡片隐藏时 getBoundingClientRect 返回 0，此时算出来的视图是错的，
+     记个标记，切到本页时重新算一次。 */
+  GP.vbValid = !!(r.width && r.height);
+  gpApplyVB();
+}
+
+/* 把某个方块移到视口中央（模块列表点选时用） */
+function gpCenterOn(i) {
+  const n = GP.nodes[i];
+  if (!n || !GP.vb) return;
+  GP.vb = { x: n.bx + n.bw / 2 - GP.vb.w / 2,
+            y: n.by + n.bh / 2 - GP.vb.h / 2,
+            w: GP.vb.w, h: GP.vb.h };
+  gpApplyVB();
+}
+
+function gpZoom(f, cx, cy) {
+  if (!GP.vb) return;
+  const v = GP.vb;
+  const nw = gpClamp(v.w * f, 120, 60000);
+  const s = nw / v.w;
+  GP.vb = { x: cx - (cx - v.x) * s, y: cy - (cy - v.y) * s, w: nw, h: v.h * s };
+  gpApplyVB();
+}
+
+/* ================== 选中方块 → 参数面板 ================== */
+function gpSelect(i) {
+  GP.sel = i;
+  const sel = $('gpPick');
+  if (sel) sel.value = String(i);
+  gpRender();
+  gpPanel();
+  if (i >= 0) gpPollNow();
+}
+
+function gpPanel() {
+  const box = $('gpPanel');
+  const i = GP.sel;
+  if (i < 0) {
+    $('gpSelName').textContent = '模块参数';
+    $('gpSelMeta').textContent = '未选中';
+    box.innerHTML = '<div class="gpempty">在左边点一个方块，这里会列出它的参数。</div>';
+    return;
+  }
+  const n = GP.nodes[i];
+  $('gpSelName').textContent = n.cell || n.name;
+  $('gpSelMeta').textContent = n.friendly || n.name;
+
+  const cs = gpNodeControls(n);
+  if (!cs.length) {
+    box.innerHTML = '<div class="gpempty">这个模块没有可调参数'
+      + '（例如输入/输出端点，或纯计算单元）。<br><br>'
+      + '<span class="paddr">' + gpX(n.name) + '</span></div>';
+    return;
+  }
+
+  let h = '';
+  /* 桥接服务开启（enabled）或正在调试（busy）时，设备端都会拒绝 /api/dsp 写入，
+   * 但网页上的提示以前只看 busy，导致「开了桥接但没连 SigmaStudio」时
+   * 写入悄悄失败却不提示。这里改成与设备端 bridge_blocks_local_write 一致的口径。 */
+  if (bridgeOn || window.__bridging) {
+    h += '<div class="notice warn" style="margin-top:0">'
+       + '<b>' + (window.__bridging ? 'SigmaStudio 调试中' : '桥接服务已开启')
+       + '，写入被拒绝。</b><br>'
+       + '桥接服务开启期间 DSP 由 SigmaStudio 管理，请先到「工具」页关闭桥接服务。</div>';
+  }
+
+  /*
+   * EQ：把一个 filter 里的**所有段合并画在一张图**上。
+   * 同一个 cell 下的多个 Targ_B2_N 就是几段不同频段的修改点（实测频率各不相同，
+   * 如 600/1999/6491Hz、51/199/252Hz），级联起来才是这个 filter 在整段频谱上的总响应。
+   * 所以：每段画一条细线（看得到各个修改点），总响应画一条粗线。
+   */
+  const eqIdx = [];
+  cs.forEach((p, idx) => { if (gpKind(n.cell, p).k === 'eq') eqIdx.push(idx); });
+
+  cs.forEach((p, idx) => {
+    const k = gpKind(n.cell, p);
+    if (k.k === 'eq') {
+      /* 只在第一段处渲染整组，其余跳过（否则会重复出图） */
+      if (idx === eqIdx[0]) h += gpEqGroupCard(n, cs, eqIdx);
+      return;
+    }
+    h += gpParamCard(n, p, k, idx);
+  });
+  box.innerHTML = h;
+  gpBindPanel(n, cs);
+  gpDrawPanelCurves(n, cs);
+}
+
+/* 每个滤波段的可区分颜色（图上的细线、图例、下面列表共用同一套） */
+const GP_EQ_COLORS = ['#5b8cff', '#35e0c8', '#ff9f43', '#c98bff',
+                      '#3fd07a', '#ff6e9c', '#ffd479', '#7ad0ff'];
+
+function gpEqGroupCard(n, cs, eqIdx) {
+  let h = '<div class="gpparam gpgroup" data-q="e0" data-kind="eq">';
+  h += '<div class="ph"><span class="pn">滤波段（可调）</span>'
+     + '<span class="ptag rw">可写</span></div>';
+  h += '<div class="paddr">' + eqIdx.length + ' 段 biquad 级联 · ' + gpX(n.cell || n.name) + '</div>';
+  h += '<svg class="gpcurve eqgrp" data-eqs="' + eqIdx.join(',') + '"></svg>';
+  h += '<div class="eqlegend">—</div>';
+  h += '<div class="paddr eqinfo">—</div>';
+  h += '<div class="paddr" style="margin-top:4px">细线=各段，粗线=总响应（各段 dB 相加）。'
+     + '图例是每段的<b>中心频率</b>与<b>该频点增益</b>；≈ 表示该段是搁架/一阶类（实极点），'
+     + '频率按最大偏离点估计。</div>';
+  h += '<div class="eqlst">';
+  eqIdx.forEach((idx, i) => {
+    h += gpEqBandHtml(cs[idx], i, false);
+  });
+  h += '</div></div>';
+  return h;
+}
+
+/* 一段的「当前实际值」文案（由系数反推）。
+   ⚠️ 生成与刷新必须走同一个函数 —— 曾经两处各写一份，结果打开时是新格式、
+   一动鼠标又变回旧格式，看起来像改了没生效。 */
+function gpEqStatText(addr, it) {
+  return '0x' + addr.toString(16).toUpperCase().padStart(4, '0') + ' · '
+       + (it.est ? '≈' : '') + gpFmtHz(it.f) + ' '
+       + (it.db >= 0 ? '+' : '') + it.db.toFixed(1) + 'dB';
+}
+
+/*
+ * 一段的编辑器。两种版式共用同一套 class
+ * （`.eqt/.eqf/.eqq/.eqg/.eqapply/.eqrevert/.ba/.eqwarn`），
+ * 所以 gpEqBandBind() 和 eqRedraw() 都不用区分版式：
+ *   asRow=true  → 首页的参数表（<tr>）
+ *   asRow=false → 「连线图」页右栏的竖排卡片（栏宽只有 290px，放不下 7 列）
+ */
+function gpEqBandHtml(p, i, asRow, color) {
+  const d = gpEqDescribe(gpEqWordsOf(p));
+  let opt = '';
+  GP_EQ_TYPES.forEach(t => {
+    opt += '<option value="' + t[0] + '"' + (t[0] === d.guess ? ' selected' : '') + '>'
+         + gpX(t[1]) + '</option>';
+  });
+  /* color 可选：首页多滤波器叠加时传滤波器颜色，单滤波器面板则按段序号取色 */
+  const col = color || GP_EQ_COLORS[i % GP_EQ_COLORS.length];
+  const sel = '<select class="eqt">' + opt + '</select>';
+  const fld = '<div class="fld"><input class="eqf" type="number" step="1" min="10" max="24000" value="'
+            + Math.round(d.f) + '"><span class="u">Hz</span></div>';
+  const qin = '<input class="eqq" type="number" step="0.05" min="0.1" max="12" value="'
+            + d.q.toFixed(2) + '">';
+  const gin = '<div class="fld"><input class="eqg" type="number" step="0.5" min="-18" max="18" value="'
+            + d.db.toFixed(1) + '"><span class="u">dB</span></div>';
+  const acts = '<button class="btn ghost eqapply">应用</button>'
+             + '<button class="btn ghost eqrevert">还原</button>';
+  const ba = gpEqStatText(p.addr, d);
+
+  if (asRow) {
+    let h = '<tr class="eqband" data-eqaddr="' + p.addr + '" data-eqidx="' + i + '">';
+    h += '<td class="c-num"><span class="bwrap"><i class="eqb" style="background:' + col
+       + '"></i>B' + (i + 1) + '</span></td>';
+    h += '<td class="c-type">' + sel + '</td>';
+    h += '<td class="c-freq">' + fld + '</td>';
+    h += '<td class="c-q">' + qin + '</td>';
+    h += '<td class="c-gain">' + gin + '</td>';
+    h += '<td class="c-addr" title="参数地址 ' + p.addr + '（十进制）">'
+       + '<span class="ba">' + gpX(ba) + '</span>'
+       + '<span class="eqsave none"></span></td>';
+    h += '<td class="c-act"><div class="acts">' + acts + '</div>'
+       + '<div class="eqwarn" hidden></div></td>';
+    return h + '</tr>';
+  }
+
+  let h = '<div class="eqband" data-eqaddr="' + p.addr + '" data-eqidx="' + i + '">';
+  h += '<div class="bhead"><i class="eqb" style="background:' + col + '"></i>'
+     + '<span class="bn">B' + (i + 1) + '</span>'
+     + '<span class="ba">' + gpX(ba) + '</span></div>';
+  h += '<div class="eqctl">'
+     + '<label>类型</label>' + sel
+     + '<label>频率</label>' + fld
+     + '<label>Q</label>' + qin
+     + '<label>增益</label>' + gin
+     + '<div class="acts">' + acts + '</div>'
+     + '</div>';
+  h += '<div class="eqwarn" hidden></div>';
+  return h;
+}
+
+/* 绑定一段编辑器的事件。root 为容器，find(p.addr) 返回参数对象 */
+function gpEqBandBind(root, find, onDone) {
+  Array.from(root.querySelectorAll('.eqband')).forEach(box => {
+    const p = find(+box.dataset.eqaddr);
+    if (!p) return;
+    const warn = box.querySelector('.eqwarn');
+    const say = (t, bad) => {
+      warn.hidden = !t;
+      warn.textContent = t || '';
+      warn.className = 'eqwarn' + (bad ? ' bad' : '');
+    };
+    box.querySelector('.eqapply').addEventListener('click', async () => {
+      const type = box.querySelector('.eqt').value;
+      const f = parseFloat(box.querySelector('.eqf').value);
+      const q = parseFloat(box.querySelector('.eqq').value);
+      const g = parseFloat(box.querySelector('.eqg').value);
+      if (!(f > 0) || !(q > 0)) { say('频率 / Q 不合法', true); return; }
+      const w = gpEqWordsFrom(type, f, q, g);
+      if (!gpEqStableWords(w)) { say('算出来不稳定（Q 或增益太大）', true); return; }
+      try {
+        await postJSON('/api/dsp', { addr: p.addr, hex: gpEqHex(w) });
+        GP.eqWords.set(p.addr, w);
+        const back = await gpEqReadBack(p.addr);
+        if (back) GP.eqWords.set(p.addr, back);
+        say('已写入', false);
+        toast('B' + (box.dataset.eqidx * 1 + 1) + ' 已写入', 'ok', 1400);
+        /* 写进 DSP 之后立刻存到设备：否则 1452 断电重启 / 固件映像重推时
+           会被冲回「录制映像那一刻的值」，用户会以为白调了 */
+        await eqPersist(p, back || w);
+        if (onDone) onDone();
+      } catch (e) {
+        say('写入失败：' + e.message, true);
+      }
+    });
+    box.querySelector('.eqrevert').addEventListener('click', async () => {
+      const orig = [0, 1, 2, 3, 4].map(i => gpBytesToU32(p.data, i));
+      try {
+        await postJSON('/api/dsp', { addr: p.addr, hex: gpEqHex(orig) });
+        GP.eqWords.set(p.addr, orig);
+        say('已还原到导入时的值', false);
+        /* 还原了就别再保存，从设备的保存表里移除这一段 */
+        await eqForget(p);
+        if (onDone) onDone();
+      } catch (e) {
+        say('写入失败：' + e.message, true);
+      }
+    });
+  });
+}
+
+/* ---------- EQ 系数：计算与读写 ----------
+ *
+ * 系数在 DSP 内存里的布局（实测确定，9/9 段交叉验证）：
+ *     memory = [b0, b1, b2, -a2, -a1]
+ * 其中 H(z) = (b0 + b1 z⁻¹ + b2 z⁻²) / (1 + a1 z⁻¹ + a2 z⁻²)
+ * 即两个分母系数**都取负、且 a2 在前**。
+ *
+ * 四种组合（顺序 a1a2/a2a1 × 符号 c=-a/c=+a）中只有这一种让现有 9 个
+ * 滤波器段全部稳定，其余三种全部不稳定 —— 这是判断顺序的依据。
+ */
+const GP_EQ_FS = 96000;
+const GP_EQ_TYPES = [
+  ['peak', '峰值'], ['lowshelf', '低搁架'], ['highshelf', '高搁架'],
+  ['lowpass', '低通'], ['highpass', '高通'], ['none', '直通']
+];
+
+function gpEqWordsOf(p) {
+  const w = GP.eqWords.get(p.addr);
+  if (w) return w;
+  return [0, 1, 2, 3, 4].map(i => gpBytesToU32(p.data, i));
+}
+
+function gpEqHex(w) { return w.map(x => gpHex8(x >>> 0)).join(''); }
+
+/* RBJ Audio EQ Cookbook */
+function gpEqCoef(type, f0, Q, gainDb) {
+  const Fs = GP_EQ_FS;
+  f0 = gpClamp(f0, 10, Fs * 0.49);
+  Q = gpClamp(Q, 0.05, 30);
+  const A = Math.pow(10, gpClamp(gainDb, -24, 24) / 40);
+  const w0 = 2 * Math.PI * f0 / Fs;
+  const cw = Math.cos(w0), sw = Math.sin(w0);
+  const alpha = sw / (2 * Q);
+  let b0, b1, b2, a0, a1, a2;
+  if (type === 'lowshelf' || type === 'highshelf') {
+    const two = 2 * Math.sqrt(A) * (sw / 2);      /* S = 1 */
+    if (type === 'lowshelf') {
+      b0 = A * ((A + 1) - (A - 1) * cw + two);
+      b1 = 2 * A * ((A - 1) - (A + 1) * cw);
+      b2 = A * ((A + 1) - (A - 1) * cw - two);
+      a0 = (A + 1) + (A - 1) * cw + two;
+      a1 = -2 * ((A - 1) + (A + 1) * cw);
+      a2 = (A + 1) + (A - 1) * cw - two;
+    } else {
+      b0 = A * ((A + 1) + (A - 1) * cw + two);
+      b1 = -2 * A * ((A - 1) + (A + 1) * cw);
+      b2 = A * ((A + 1) + (A - 1) * cw - two);
+      a0 = (A + 1) - (A - 1) * cw + two;
+      a1 = 2 * ((A - 1) - (A + 1) * cw);
+      a2 = (A + 1) - (A - 1) * cw - two;
+    }
+  } else if (type === 'lowpass') {
+    b0 = (1 - cw) / 2; b1 = 1 - cw; b2 = (1 - cw) / 2;
+    a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha;
+  } else if (type === 'highpass') {
+    b0 = (1 + cw) / 2; b1 = -(1 + cw); b2 = (1 + cw) / 2;
+    a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha;
+  } else if (type === 'none') {
+    b0 = 1; b1 = 0; b2 = 0; a0 = 1; a1 = 0; a2 = 0;
+  } else {  /* peak */
+    b0 = 1 + alpha * A; b1 = -2 * cw; b2 = 1 - alpha * A;
+    a0 = 1 + alpha / A; a1 = -2 * cw; a2 = 1 - alpha / A;
+  }
+  b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
+  return { b: [b0, b1, b2], a: [a1, a2] };
+}
+
+/* 8.24 定点。⚠️ 钳到 ±7.9999：这一格式能表示的范围就是 [-8, 8)，
+ * 超出会被 DSP 当成反相的怪值，而不是饱和。 */
+function gpEqQ824(v) {
+  return Math.round(gpClamp(v, -7.9999999, 7.9999999) * 16777216);
+}
+
+function gpEqWordsFrom(type, f0, Q, gainDb) {
+  const c = gpEqCoef(type, f0, Q, gainDb);
+  /* [b0, b1, b2, -a2, -a1] */
+  return [c.b[0], c.b[1], c.b[2], -c.a[1], -c.a[0]].map(gpEqQ824);
+}
+
+function gpEqStableWords(w) {
+  const c = w.map(gpS32).map(x => x / 16777216);
+  const a1 = -c[4], a2 = -c[3];
+  return Math.abs(a2) < 1 && Math.abs(a1) < 1 + a2;
+}
+
+/*
+ * 从系数反推滤波器类型。
+ *
+ * ⚠️ 修复：以前只返回 'none'（直通）或 'peak'（峰值），所以从 SigmaStudio 读出来的
+ * 低通/高通/搁架全部被显示成「峰值」。
+ *
+ * 判据（RBJ cookbook 的结构特征，对提升/衰减都成立）：
+ *   - 直通：各系数接近单位冲激；
+ *   - 低通/高通：分子 b0≈b2（严格对称），b1 的符号区分方向（低通为正、高通为负）；
+ *   - 搁架：分子 b0≠b2，且 DC 端与 Nyquist 端的增益一高一低（作用端偏离 0dB）；
+ *   - 峰值：其余（两端增益都贴近 0dB，中间隆起/凹陷）。
+ */
+function gpEqClassify(w) {
+  const c = w.map(gpS32).map(x => x / 16777216);
+  const b0 = c[0], b1 = c[1], b2 = c[2];
+  const eps = 1e-3;
+  const flat = Math.abs(b0 - 1) < eps && Math.abs(b1) < eps && Math.abs(b2) < eps &&
+               Math.abs(c[3]) < eps && Math.abs(c[4]) < eps;
+  if (flat) return 'none';
+
+  const co = gpBqPick(w).co;
+  /* DC 与 Nyquist 端增益（避开 0/π 的数值奇点） */
+  const gDC = gpBqMagDb(co, 1e-3);
+  const gNY = gpBqMagDb(co, Math.PI - 1e-3);
+
+  /* 低通/高通：RBJ 里分子严格 b0==b2，b1 的符号决定方向 */
+  if (Math.abs(b0 - b2) < 1e-3 && Math.abs(b0) > 1e-4) {
+    return b1 > 0 ? 'lowpass' : 'highpass';
+  }
+
+  /* 搁架：一端明显偏离 0dB（作用端），另一端贴近 0dB */
+  const dDC = Math.abs(gDC), dNY = Math.abs(gNY);
+  if (Math.max(dDC, dNY) > 0.5 && Math.min(dDC, dNY) < 0.5 &&
+      Math.abs(dDC - dNY) > 0.5) {
+    return dDC > dNY ? 'lowshelf' : 'highshelf';
+  }
+
+  return 'peak';
+}
+
+/* 从系数反推「用户在编辑器里会填什么」：类型 + 中心频率 + Q + 增益 */
+function gpEqDescribe(w) {
+  const type = gpEqClassify(w);
+  const pick = gpBqPick(w);
+  const co = pick.co;
+  const pl = gpBqPoles(co);
+  const fromPole = (isFinite(pl.f) && pl.f > 20 && pl.r > 0.02 && pl.r < 1);
+  let f = fromPole ? pl.f : 1000;
+  let q = 0.707;
+  if (fromPole) {
+    /* 极点半径 r ≈ exp(-w0/(2Q)) → Q ≈ w0 / (-2 ln r) */
+    const w0 = 2 * Math.PI * f / GP_EQ_FS;
+    const lr = Math.log(pl.r);
+    if (lr < -1e-6) q = gpClamp(w0 / (-2 * lr), 0.1, 12);
+  }
+  let db;
+  /* 增益按类型取：搁架取作用端的全量增益，低通/高通/直通无增益为 0，峰值取中心频点增益 */
+  if (type === 'lowshelf') {
+    db = gpBqMagDb(co, 1e-3);
+  } else if (type === 'highshelf') {
+    db = gpBqMagDb(co, Math.PI - 1e-3);
+  } else if (type === 'lowpass' || type === 'highpass' || type === 'none') {
+    db = 0;
+  } else {
+    db = gpBqMagDb(co, 2 * Math.PI * f / GP_EQ_FS);
+  }
+  if (!isFinite(db)) db = 0;
+  db = gpClamp(db, -18, 18);
+  return { f: f, q: q, db: db, est: !fromPole, guess: type };
+}
+
+/* 写完后回读 5 个字，确认真的落进 DSP 了（而不是只信 I2C 的 ACK） */
+async function gpEqReadBack(addr) {
+  try {
+    const r = await fetch('/api/dsp?addr=' + addr + '&len=20', { cache: 'no-store' });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j.ok || !j.hex || j.hex.length < 40) return null;
+    const hx = j.hex;
+    return [0, 1, 2, 3, 4].map(i => parseInt(hx.substr(i * 8, 8), 16) >>> 0);
+  } catch (_) { return null; }
+}
+
+function gpParamCard(n, p, k, idx) {
+  const q = 'd' + idx;
+  const ro = (k.k === 'level' || k.k === 'eq' || k.k === 'raw');
+  const tag = ro ? '<span class="ptag ro">只读</span>'
+                 : '<span class="ptag rw">可调</span>';
+  let h = '<div class="gpparam" data-q="' + q + '" data-kind="' + k.k + '">';
+  h += '<div class="ph"><span class="pn">' + gpX(gpShortName(n, p)) + '</span>' + tag + '</div>';
+  h += '<div class="paddr">地址 ' + p.addr + ' (0x' + p.addr.toString(16).toUpperCase().padStart(4, '0')
+     + ') · ' + p.words + ' 字</div>';
+
+  if (k.k === 'gain') {
+    const raw = GP.live.get(p.addr);
+    const db = (raw === undefined) ? gpDb824(gpBytesToU32(p.data, 0)) : gpDb824(raw);
+    const v = gpClamp(isFinite(db) ? db : -96, -96, 20);
+    const dstr = raw === undefined ? gpFmtDb(db) + '（导入时的值）' : gpFmtDb(db);
+    h += '<div class="ph" style="margin-top:6px"><span class="pn"></span>'
+       + '<span class="pv vg">' + dstr + '</span></div>';
+    h += '<input type="range" class="pg" min="-96" max="20" step="0.5" value="' + v.toFixed(1) + '">';
+  } else if (k.k === 'switch') {
+    const raw = GP.live.get(p.addr);
+    const on = raw === undefined ? (gpBytesToU32(p.data, 0) !== 0) : (raw !== 0);
+    h += '<div class="ph" style="margin-top:6px"><span class="pn">' + gpX(on ? k.hi : k.lo)
+       + '</span><span class="pv vg">' + (on ? '1' : '0') + '</span></div>';
+    h += '<div class="btns"><button class="btn ghost sm ps">切换为 ' + gpX(on ? k.lo : k.hi)
+       + '</button></div>';
+  } else if (k.k === 'mixgain') {
+    h += '<div class="pm">';
+    for (let w = 0; w < k.w; w++) {
+      const raw = GP.live.get(p.addr + w);
+      const db = (raw === undefined) ? gpDb824(gpBytesToU32(p.data, w)) : gpDb824(raw);
+      const v = gpClamp(isFinite(db) ? db : -96, -96, 20);
+      h += '<div class="ph" style="margin-top:6px"><span class="pn">通道 ' + (w + 1) + '</span>'
+         + '<span class="pv vg">' + gpFmtDb(db) + '</span></div>';
+      h += '<input type="range" class="pg" data-w="' + w + '" min="-96" max="20" step="0.5" value="'
+         + v.toFixed(1) + '">';
+    }
+    h += '</div>';
+  } else if (k.k === 'level') {
+    const db = gpLevelDb(p.addr);
+    h += '<div class="ph" style="margin-top:6px"><span class="pn">Q15 峰值</span>'
+       + '<span class="pv vg">' + (db === null ? '—' : gpFmtDb(db)) + '</span></div>';
+  } else if (k.k === 'eq') {
+    /* EQ 段不单独出卡片（由 gpEqGroupCard 合并成一张图），走到这里说明是异常情况 */
+    h += '<div class="paddr">地址 ' + p.addr + ' · ' + p.words + ' 字</div>';
+  } else {
+    const raw = GP.live.get(p.addr);
+    const hex = raw === undefined
+      ? (p.data.length ? p.data.slice(0, 4).map(x => x.toString(16).toUpperCase().padStart(2, '0')).join(' ') : '—')
+      : gpHex8(raw);
+    h += '<div class="hexrow">' + gpX(hex);
+    if (k.w === 1) h += ' · 8.24 = ' + (raw === undefined ? '' : gpF824(raw).toFixed(5));
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function gpBytesToU32(d, w) {
+  const o = w * 4;
+  if (!d || d.length < o + 4) return 0;
+  return ((d[o] << 24) | (d[o + 1] << 16) | (d[o + 2] << 8) | d[o + 3]) >>> 0;
+}
+
+/* ---------- 面板事件绑定 ---------- */
+function gpBindPanel(n, cs) {
+  const box = $('gpPanel');
+
+  Array.from(box.querySelectorAll('.pg')).forEach(inp => {
+    const card = inp.closest('.gpparam');
+    const idx = +card.dataset.q.slice(1);
+    const p = cs[idx];
+    const k = gpKind(n.cell, p);
+    const vg = card.querySelector('.vg');
+    inp.style.setProperty('--p', (((+inp.value) + 96) / 116 * 100).toFixed(1) + '%');
+
+    inp.addEventListener('input', () => {
+      inp.style.setProperty('--p', (((+inp.value) + 96) / 116 * 100).toFixed(1) + '%');
+      if (vg) vg.textContent = gpFmtDb(+inp.value);
+    });
+    inp.addEventListener('change', async () => {
+      const db = +inp.value;
+      try {
+        if (k.k === 'mixgain') {
+          const w = +inp.dataset.w;
+          await gpWrite824(p.addr + w, db);
+        } else {
+          await gpWrite824(p.addr, db);
+        }
+        toast('已写入 ' + gpFmtDb(db), 'ok', 1400);
+      } catch (e) {
+        toast('写入失败：' + e.message, 'err', 4200);
+      }
+      gpPollNow();
+    });
+  });
+
+  Array.from(box.querySelectorAll('.ps')).forEach(btn => {
+    const card = btn.closest('.gpparam');
+    const idx = +card.dataset.q.slice(1);
+    const p = cs[idx];
+    const k = gpKind(n.cell, p);
+    btn.addEventListener('click', async () => {
+      const raw = GP.live.get(p.addr);
+      const on = raw === undefined ? (gpBytesToU32(p.data, 0) !== 0) : (raw !== 0);
+      try {
+        await postJSON('/api/dsp', { addr: p.addr, hex: on ? '00000000' : '00000001' });
+        toast('已切换为 ' + (on ? k.lo : k.hi), 'ok', 1400);
+      } catch (e) {
+        toast('写入失败：' + e.message, 'err', 4200);
+      }
+      gpPollNow();
+    });
+  });
+}
+
+async function gpWrite824(addr, db) {
+  const lin = Math.pow(10, db / 20);
+  let raw = Math.round(lin * 16777216);
+  raw = gpClamp(raw, -2147483648, 2147483647);
+  return postJSON('/api/dsp', { addr: addr, hex: gpHex8(raw) });
+}
+
+/* ================== EQ 系数 → 频响曲线 ==================
+ * 5 个 8.24 字。**顺序是按实测反推的**：工程里的 EQ 目标系数
+ * 按 [b0,b1,b2,a1,a2] 读出来是不稳定滤波器（|a2|>1），
+ * 按 [b0,b1,b2,a2,a1] 读出来才落在单位圆内，所以默认用后者，
+ * 并给一个手动切换，方便和 SigmaStudio 自己的响应图对照。
+ */
+function gpBiquadCoef(w, order) {
+  const c = w.map(gpS32).map(x => x / 16777216);
+  const b = [c[0], c[1], c[2]];
+  let A1, A2;
+  if (order === 'b0b1b2_a1a2') { A1 = c[3]; A2 = c[4]; }
+  else { A1 = c[4]; A2 = c[3]; }        /* b0b1b2_a2a1 */
+  /* y[n] = b·x + A1·y[n-1] + A2·y[n-2]  →  1 + c1 z⁻¹ + c2 z⁻²,  c1=-A1, c2=-A2 */
+  return { b: b, c1: -A1, c2: -A2 };
+}
+
+function gpBqStable(co) {
+  const p = co.c1, q = co.c2;
+  return Math.abs(q) < 1 && Math.abs(p) < 1 + q;
+}
+
+function gpBqPick(w) {
+  const o1 = gpBiquadCoef(w, 'b0b1b2_a1a2');
+  const o2 = gpBiquadCoef(w, 'b0b1b2_a2a1');
+  if (GP.bqOrder === 'b0b1b2_a1a2') return { co: o1, name: 'b0,b1,b2,a1,a2', ok: gpBqStable(o1) };
+  if (GP.bqOrder === 'b0b1b2_a2a1') return { co: o2, name: 'b0,b1,b2,a2,a1', ok: gpBqStable(o2) };
+  if (gpBqStable(o2)) return { co: o2, name: 'b0,b1,b2,a2,a1', ok: true };
+  if (gpBqStable(o1)) return { co: o1, name: 'b0,b1,b2,a1,a2', ok: true };
+  return { co: o1, name: 'b0,b1,b2,a1,a2', ok: false };
+}
+
+function gpBqMagDb(co, w) {
+  const b = co.b, c1 = co.c1, c2 = co.c2;
+  const cw = Math.cos(w), sw = Math.sin(w), c2w = Math.cos(2 * w), s2w = Math.sin(2 * w);
+  const nr = b[0] + b[1] * cw + b[2] * c2w;
+  const ni = -(b[1] * sw + b[2] * s2w);
+  const dr = 1 + c1 * cw + c2 * c2w;
+  const di = -(c1 * sw + c2 * s2w);
+  const n2 = nr * nr + ni * ni, d2 = dr * dr + di * di;
+  if (d2 < 1e-30) return 60;
+  return 10 * Math.log10(Math.max(n2, 1e-30) / d2);
+}
+
+function gpFmtHz(f) {
+  if (!isFinite(f) || f <= 0) return '—';
+  if (f >= 10000) return (f / 1000).toFixed(0) + 'k';
+  if (f >= 1000) return (f / 1000).toFixed(1) + 'k';
+  return Math.round(f) + 'Hz';
+}
+
+/*
+ * 把一个 filter 的所有段画在**同一张图**上：
+ *   - 每段一条细线（各自的修改点一目了然）
+ *   - 总响应一条粗线（各段级联，= dB 相加 —— 这才是该 filter 在整段频谱上的总修改量）
+ * 横轴对数 20Hz~Fs/2，带 100/1k/10k 网格与 0dB 虚线。
+ */
+function gpDrawEqGroup(svg, wordsList, W, H) {
+  W = W || 640;
+  H = H || 210;
+  const Fs = 96000, NP = 300;
+  const fMin = 20, fMax = Fs / 2;
+  const lr = Math.log(fMax / fMin);
+  /* 左边留 dB 刻度、下边留频率刻度的位置 */
+  const PL = 34, PR = 12, PT = 12, PB = 22;
+  const pw = W - PL - PR, ph = H - PT - PB;
+
+  const freq = [], wv = [];
+  for (let i = 0; i <= NP; i++) {
+    const f = fMin * Math.pow(fMax / fMin, i / NP);
+    freq.push(f);
+    wv.push(2 * Math.PI * f / Fs);
+  }
+
+  const curves = wordsList.map((w, bi) => {
+    const pick = gpBqPick(w);
+    return {
+      co: pick.co, ok: pick.ok, order: pick.name,
+      color: GP_EQ_COLORS[bi % GP_EQ_COLORS.length],
+      db: wv.map(x => gpBqMagDb(pick.co, x))
+    };
+  });
+
+  const comp = freq.map((_, i) => curves.reduce((s, c) => s + c.db[i], 0));
+
+  let lo = 1e9, hi = -1e9;
+  curves.forEach(c => c.db.forEach(v => { if (v < lo) lo = v; if (v > hi) hi = v; }));
+  comp.forEach(v => { if (v < lo) lo = v; if (v > hi) hi = v; });
+  lo = gpClamp(lo - 3, -48, 0);
+  hi = gpClamp(hi + 3, 0, 48);
+  if (hi - lo < 8) {                     /* 全平时给个最小纵轴范围，免得线贴在边上 */
+    const m = (hi + lo) / 2;
+    lo = Math.max(-48, m - 4); hi = Math.min(48, m + 4);
+  }
+  const y = d => PT + ph - ((d - lo) / (hi - lo)) * ph;
+  const px = i => PL + i / NP * pw;
+  const fx = f => PL + Math.log(f / fMin) / lr * pw;
+
+  let g = '';
+  const AX = '#5b6684';
+
+  /* dB 横格线 + 左侧刻度（取能让格数落在 4~8 之间的"整"步长） */
+  const nice = [1, 2, 3, 5, 6, 10, 12, 15, 20, 24];
+  let step = 24;
+  for (const s of nice) { if (s >= (hi - lo) / 6) { step = s; break; } }
+  for (let d = Math.ceil(lo / step) * step; d <= hi + 1e-6; d += step) {
+    const yy = y(d).toFixed(1);
+    const isZero = Math.abs(d) < 1e-6;
+    g += '<line x1="' + PL + '" x2="' + (W - PR) + '" y1="' + yy + '" y2="' + yy +
+         '" stroke="' + (isZero ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.07)') +
+         '" stroke-dasharray="' + (isZero ? '3 3' : 'none') + '"/>';
+    g += '<text x="' + (PL - 6) + '" y="' + yy + '" text-anchor="end" dominant-baseline="middle" ' +
+         'font-size="9" fill="' + AX + '" font-variant-numeric="tabular-nums">' +
+         (d > 0 ? '+' : '') + d + '</text>';
+  }
+
+  /* 频率竖线 + 下侧刻度。画布窄的时候少画几个，不然字会挤成一团 */
+  const FT = W < 420
+    ? [[50, '50'], [200, '200'], [1000, '1k'], [5000, '5k'], [20000, '20k']]
+    : [[20, '20'], [50, '50'], [100, '100'], [200, '200'], [500, '500'],
+       [1000, '1k'], [2000, '2k'], [5000, '5k'], [10000, '10k'], [20000, '20k'],
+       [48000, '48k']];
+  FT.forEach(([f, lab]) => {
+    if (f < fMin || f > fMax) return;
+    const xx = fx(f).toFixed(1);
+    g += '<line x1="' + xx + '" x2="' + xx + '" y1="' + PT + '" y2="' + (PT + ph) +
+         '" stroke="rgba(255,255,255,.05)"/>';
+    g += '<text x="' + xx + '" y="' + (PT + ph + 13) + '" text-anchor="middle" ' +
+         'font-size="9" fill="' + AX + '">' + lab + '</text>';
+  });
+
+  const toPath = (arr, close) => {
+    let d = '';
+    /* ⚠️ 纵轴有上下限（±48dB），深陷波的段会超出这个范围；
+       不钳位的话那条线会整段跑出图外"消失"，看起来像漏画。钳位后它会贴着边框走。 */
+    arr.forEach((v, i) => {
+      const yv = y(gpClamp(v, lo, hi));
+      d += (i ? 'L' : 'M') + px(i).toFixed(1) + ',' + yv.toFixed(1) + ' ';
+    });
+    if (close) {
+      d += 'L' + px(NP).toFixed(1) + ',' + y(0).toFixed(1) + ' ';
+      d += 'L' + px(0).toFixed(1) + ',' + y(0).toFixed(1) + ' Z';
+    }
+    return d;
+  };
+
+  /* 总响应用的渐变填充，色彩锚在 0dB 线上 */
+  const gid = 'eqg' + (gpDrawEqGroup._n = (gpDrawEqGroup._n || 0) + 1);
+  const bad = curves.some(c => !c.ok);
+  const mainCol = bad ? '#ff8e8e' : '#eaf1ff';
+  g += '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">'
+     + '<stop offset="0%" stop-color="' + (bad ? '#ff8e8e' : '#5b8cff') + '" stop-opacity=".30"/>'
+     + '<stop offset="100%" stop-color="' + (bad ? '#ff8e8e' : '#35e0c8') + '" stop-opacity=".04"/>'
+     + '</linearGradient></defs>';
+
+  /* 各段先画（细、半透明），总响应最后画（带填充 + 粗线，压在最上面） */
+  curves.forEach(c => {
+    g += '<path d="' + toPath(c.db) + '" fill="none" stroke="' + c.color +
+         '" stroke-width="1.2" opacity=".62" stroke-linejoin="round"/>';
+  });
+  g += '<path d="' + toPath(comp, true) + '" fill="url(#' + gid + ')" stroke="none"/>';
+  g += '<path d="' + toPath(comp) + '" fill="none" stroke="' + mainCol +
+       '" stroke-width="2.1" stroke-linejoin="round"/>';
+
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.innerHTML = g;
+
+  /* 每段的「修改点」：中心频率 + 该频点的增益。
+   *
+   * ⚠️ 不能用「幅度最大值所在的频率」当中心频率：有些段的响应在频段边缘
+   * 反而最高（例如高通肩、或接近全通的小修改），会报出 48k 这种没意义的值
+   * （实测 B3/B4 就被报成 48k）。中心频率应该由**极点**给出；
+   * 只有极点退化成实极点（f=0，常见于低频搁架）时才退回用最大偏离点。
+   */
+  const info = curves.map(c => {
+    const pl = gpBqPoles(c.co);
+    const fromPole = (isFinite(pl.f) && pl.f > 20);
+    let cf = fromPole ? pl.f : 0;
+    if (!cf) {
+      let dv = 0, di = 0;
+      c.db.forEach((v, i) => { if (Math.abs(v) > Math.abs(dv)) { dv = v; di = i; } });
+      cf = freq[di];
+    }
+    return { f: cf, db: gpBqMagDb(c.co, 2 * Math.PI * cf / Fs), r: pl.r, est: !fromPole };
+  });  /* 总响应的峰值（这个是「整条曲线最高点」，含义明确，直接取） */
+  let cv = -1e9, ci = 0;
+  comp.forEach((v, i) => { if (v > cv) { cv = v; ci = i; } });
+
+  return { curves: curves, info: info, order: curves[0] ? curves[0].order : '',
+           bad: bad, lo: lo, hi: hi, compDb: cv, compF: freq[ci] };
+}
+
+/*
+ * 首页 EQ 总览：把多个滤波器的总响应曲线叠加在一张图上，各自一种颜色；
+ * 每个滤波段（频点）画一个可拖动的小圆点（拖动改频率/增益）。
+ * 返回坐标映射，供拖动事件把指针坐标换算成频率/增益。
+ */
+function gpDrawEqOverlay(svg, filters, W, H) {
+  W = W || 640;
+  H = H || 210;
+  const Fs = 96000, NP = 300;
+  const fMin = 20, fMax = Fs / 2;
+  const lr = Math.log(fMax / fMin);
+  const PL = 34, PR = 12, PT = 12, PB = 22;
+  const pw = W - PL - PR, ph = H - PT - PB;
+
+  const freq = [], wv = [];
+  for (let i = 0; i <= NP; i++) {
+    const f = fMin * Math.pow(fMax / fMin, i / NP);
+    freq.push(f);
+    wv.push(2 * Math.PI * f / Fs);
+  }
+
+  const groups = filters.map(f => {
+    const bands = f.bands.map(p => {
+      const live = eqBandLive(p);
+      const co = gpBqPick(live.words).co;
+      return { p: p, live: live, db: wv.map(x => gpBqMagDb(co, x)) };
+    });
+    const comp = freq.map((_, i) => bands.reduce((s, b) => s + b.db[i], 0));
+    return { color: f.color, name: f.n.cell || f.n.name, bands: bands, comp: comp };
+  });
+
+  let lo = 1e9, hi = -1e9;
+  groups.forEach(g => g.comp.forEach(v => { if (v < lo) lo = v; if (v > hi) hi = v; }));
+  lo = gpClamp(lo - 3, -48, 0);
+  hi = gpClamp(hi + 3, 0, 48);
+  if (hi - lo < 8) { const m = (hi + lo) / 2; lo = Math.max(-48, m - 4); hi = Math.min(48, m + 4); }
+
+  const y = d => PT + ph - ((d - lo) / (hi - lo)) * ph;
+  const px = i => PL + i / NP * pw;
+  const fx = f => PL + Math.log(f / fMin) / lr * pw;
+  const xf = x => fMin * Math.exp((x - PL) / pw * lr);
+  const yd = v => lo + (PT + ph - v) / ph * (hi - lo);
+
+  let g = '';
+  const AX = '#5b6684';
+
+  const nice = [1, 2, 3, 5, 6, 10, 12, 15, 20, 24];
+  let step = 24;
+  for (const s of nice) { if (s >= (hi - lo) / 6) { step = s; break; } }
+  for (let d = Math.ceil(lo / step) * step; d <= hi + 1e-6; d += step) {
+    const yy = y(d).toFixed(1);
+    const isZero = Math.abs(d) < 1e-6;
+    g += '<line x1="' + PL + '" x2="' + (W - PR) + '" y1="' + yy + '" y2="' + yy +
+         '" stroke="' + (isZero ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.07)') +
+         '" stroke-dasharray="' + (isZero ? '3 3' : 'none') + '"/>';
+    g += '<text x="' + (PL - 6) + '" y="' + yy + '" text-anchor="end" dominant-baseline="middle" ' +
+         'font-size="9" fill="' + AX + '" font-variant-numeric="tabular-nums">' +
+         (d > 0 ? '+' : '') + d + '</text>';
+  }
+
+  const FT = W < 420
+    ? [[50, '50'], [200, '200'], [1000, '1k'], [5000, '5k'], [20000, '20k']]
+    : [[20, '20'], [50, '50'], [100, '100'], [200, '200'], [500, '500'],
+       [1000, '1k'], [2000, '2k'], [5000, '5k'], [10000, '10k'], [20000, '20k'],
+       [48000, '48k']];
+  FT.forEach(([f, lab]) => {
+    if (f < fMin || f > fMax) return;
+    const xx = fx(f).toFixed(1);
+    g += '<line x1="' + xx + '" x2="' + xx + '" y1="' + PT + '" y2="' + (PT + ph) +
+         '" stroke="rgba(255,255,255,.05)"/>';
+    g += '<text x="' + xx + '" y="' + (PT + ph + 13) + '" text-anchor="middle" ' +
+         'font-size="9" fill="' + AX + '">' + lab + '</text>';
+  });
+
+  const toPath = arr => {
+    let d = '';
+    arr.forEach((v, i) => {
+      d += (i ? 'L' : 'M') + px(i).toFixed(1) + ',' + y(gpClamp(v, lo, hi)).toFixed(1) + ' ';
+    });
+    return d;
+  };
+
+  /* 每个滤波器一条总响应曲线（各自颜色） */
+  groups.forEach(grp => {
+    g += '<path d="' + toPath(grp.comp) + '" fill="none" stroke="' + grp.color +
+         '" stroke-width="2.1" stroke-linejoin="round" opacity=".95"/>';
+  });
+
+  /* 每个频点一个可拖动标记 */
+  groups.forEach(grp => {
+    grp.bands.forEach(b => {
+      const cx = fx(b.live.f).toFixed(1), cy = y(b.live.db).toFixed(1);
+      g += '<circle class="eqpt" data-addr="' + b.p.addr + '" cx="' + cx + '" cy="' + cy +
+           '" r="4.2" fill="' + grp.color + '"/>';
+    });
+  });
+
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.innerHTML = g;
+
+  return { groups: groups, fx: fx, fy: y, xf: xf, yd: yd, lo: lo, hi: hi,
+           fMin: fMin, fMax: fMax, w: W, h: H };
+}
+
+/* 面板里的 EQ 合并图（系数是只读的，画一次就够） */
+function gpDrawPanelCurves(n, cs) {
+  Array.from($('gpPanel').querySelectorAll('svg.eqgrp')).forEach(sv => {
+    const card = sv.parentNode;
+    const legend = card.querySelector('.eqlegend');
+    const info = card.querySelector('.eqinfo');
+    const idxs = String(sv.dataset.eqs || '').split(',').filter(x => x !== '').map(Number);
+    const bands = idxs.map(i => cs[i]).filter(p => p && p.data.length >= 20);
+
+    if (!bands.length) {
+      if (legend) legend.textContent = '系数不足 5 个字，无法画曲线';
+      return;
+    }
+    const words = bands.map(gpEqWordsOf);
+    /* 面板比较窄（约 290px），用偏小的 viewBox 才能保证坐标文字看得清 */
+    const r = gpDrawEqGroup(sv, words, 300, 178);
+
+    if (legend) {
+      legend.innerHTML = r.curves.map((c, i) => {
+        const it = r.info[i];
+        /* ≈ 表示该段是实极点（搁架/一阶类），频率只能按最大偏离点估计 */
+        return '<span><i style="background:' + c.color + '"></i>B' + (i + 1) + ' '
+             + (it.est ? '≈' : '') + gpFmtHz(it.f) + ' '
+             + (it.db >= 0 ? '+' : '') + it.db.toFixed(1) + 'dB</span>';
+      }).join('');
+    }
+    if (info) {
+      info.textContent = '总响应 峰值 ' + (r.compDb >= 0 ? '+' : '') + r.compDb.toFixed(1)
+        + 'dB @ ' + gpFmtHz(r.compF) + ' · 纵轴 ' + r.lo.toFixed(0) + '~' + r.hi.toFixed(0)
+        + ' dB · 系数顺序 ' + r.order + (r.bad ? ' · ⚠ 有不稳定段' : ' · 稳定');
+    }  });
+}
+
+/* 从 c1,c2 反推极点（z² + c1 z + c2），给用户一个“像不像”的判据 */
+function gpBqPoles(co) {
+  const p = co.c1, q = co.c2, disc = p * p - 4 * q;
+  if (disc < 0) {
+    const r = Math.sqrt(q);
+    const ang = Math.acos(gpClamp(-p / (2 * r), -1, 1));
+    return { r: r, f: ang / (2 * Math.PI) * 96000 };
+  }
+  const s = Math.sqrt(disc);
+  const r1 = Math.abs((-p + s) / 2), r2 = Math.abs((-p - s) / 2);
+  return { r: Math.max(r1, r2), f: 0 };
+}
+
+/* ================== 实时轮询 ==================
+ * 只读两样东西：所有电平、当前选中方块的参数。
+ * 别的参数不轮询（省带宽），导入时的初值已经够看。
+ * 刷新走**增量**（只改电平条宽度和面板数字），不重绘整张图 ——
+ * 整图 innerHTML 重建会丢掉 hover 态而且闪。
+ */
+function gpPollAddrs() {
+  const want = [];
+  GP.params.forEach(p => {
+    if (gpKind(p.cell, p).k === 'level') want.push({ addr: p.addr, words: 1 });
+  });
+  if (GP.sel >= 0) {
+    const n = GP.nodes[GP.sel];
+    gpParamsForNode(n).forEach(p => {
+      const k = gpKind(n.cell, p).k;
+      if (k === 'internal' || k === 'eq') return;
+      want.push({ addr: p.addr, words: Math.min(16, p.words || 1) });
+    });
+  }
+  /*
+   * 合并相邻地址，减少请求数（ESP32 的 httpd 只有 7 个 socket）。
+   *
+   * ⚠️ 两个必须记住的约束：
+   *  1. **DSP 内存区（< 0xF000）的地址是「字」不是「字节」** —— 覆盖 word A..B
+   *     需要 (B - A + 1) * 4 字节。曾经写成 `end - last.addr`（按字节算），
+   *     于是 52 与 66 合并出 18 字节这种**不是 4 的倍数**的长度，
+   *     而设备端按 `addr + off/4` 取子地址 → 字节↔字的映射不再是线性的
+   *     → 读回来的数据错位，**后面的电平永远读不到**。
+   *  2. /api/dsp 一次最多 64 字节，所以字跨度最多 16 个字。
+   */
+  want.sort((a, b) => a.addr - b.addr);
+  const out = [];
+  for (const w of want) {
+    const last = out[out.length - 1];
+    const canMerge = last && w.addr < 0xF000 && last.addr < 0xF000
+                  && (w.addr + w.words - last.addr) * 4 <= 64;
+    if (canMerge) {
+      last.len = (w.addr + w.words - last.addr) * 4;
+    } else {
+      out.push({ addr: w.addr, len: w.words * 4 });
+    }
+  }
+  return out;
+}
+
+async function gpPollNow() {
+  const list = gpPollAddrs();
+  if (!list.length) return;
+  if (GP.polling) return;      /* 上一轮还没回来就不叠加，避免请求堆积 */
+  GP.polling = true;
+  try {
+    for (const it of list) {
+      const r = await fetch('/api/dsp?addr=' + it.addr + '&len=' + it.len, { cache: 'no-store' });
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (!j.ok) continue;
+      const hx = j.hex || '';
+      for (let i = 0; i * 8 + 8 <= hx.length; i++) {
+        GP.live.set(it.addr + i, parseInt(hx.substr(i * 8, 8), 16) >>> 0);
+      }
+    }
+    gpUpdateLive();
+  } catch (_) { /* 设备忙/断开：下一轮再说 */ }
+  GP.polling = false;
+}
+
+function gpUpdateLive() {
+  /* 电平方块上的迷你条 */
+  Array.from($('gpSvg').querySelectorAll('.mbar')).forEach(bar => {
+    const g = bar.closest('.nd');
+    if (!g) return;
+    const n = GP.nodes[+g.dataset.i];
+    if (!n) return;
+    const lp = gpLevelParam(n);
+    if (!lp) return;
+    const v = gpLevelFrac(lp.addr);
+    if (v === null) return;
+    bar.setAttribute('width', ((+bar.dataset.w) * v).toFixed(1));
+  });
+
+  if (GP.sel < 0) return;
+  const n = GP.nodes[GP.sel];
+  if (!n) return;
+  const cs = gpNodeControls(n);
+  Array.from($('gpPanel').querySelectorAll('.gpparam')).forEach(card => {
+    const idx = +card.dataset.q.slice(1);
+    const p = cs[idx];
+    if (!p) return;
+    const raw = GP.live.get(p.addr);
+    if (raw === undefined) return;
+    const k = gpKind(n.cell, p).k;
+    const vg = card.querySelector('.vg');
+    if (k === 'gain' || k === 'mixgain') {
+      const db = gpDb824(raw);
+      if (vg) vg.textContent = gpFmtDb(db);
+      const inp = card.querySelector('.pg');
+      if (inp && document.activeElement !== inp) {
+        const v = gpClamp(db, -96, 20);
+        inp.value = v.toFixed(1);
+        inp.style.setProperty('--p', ((v + 96) / 116 * 100).toFixed(1) + '%');
+      }
+    } else if (k === 'switch') {
+      const on = raw !== 0;
+      if (vg) vg.textContent = on ? '1' : '0';
+      const lab = card.querySelector('.ph .pn');
+      if (lab) lab.textContent = on ? k.hi : k.lo;
+      const btn = card.querySelector('.ps');
+      if (btn) btn.textContent = '切换为 ' + (on ? k.lo : k.hi);
+    } else if (k === 'level') {
+      if (vg) vg.textContent = gpFmtDb(gpLevelDb(p.addr));
+    }
+  });
+}
+
+/* ================== 与设备同步 ================== */
+function gpApplyDevice(g) {
+  if (!g) return;
+  GP.dev = g;
+  const isNew = (g.netlist.valid && g.netlist.crc !== GP.loaded.netlist)
+             || (g.params.valid && g.params.crc !== GP.loaded.params);
+  if (isNew && !GP.busy && document.documentElement.dataset.page === 'graph') {
+    gpLoadFromDevice();
+  } else if (isNew && !GP.busy) {
+    gpLoadFromDevice();     /* 不是当前页也先拉下来，切过去就能立刻看到 */
+  }
+  gpUpdateSource();
+  if (!GP.poll) GP.poll = setInterval(() => {
+    /*
+     * ⚠️ 标签页不可见时不轮询。
+     * ESP32 的 httpd 只有 7 个 socket，而这个轮询是**永远不停**的；
+     * 用户开了多个标签页/多个窗口（或把页面丢在后台）时，
+     * 每个后台页面都在持续占连接，很容易把设备拖到"新连接没反应"的地步
+     * —— 表现就是其它页面莫名 ERR_CONNECTION_TIMED_OUT。
+     */
+    if (document.hidden) return;
+    if (document.documentElement.dataset.page === 'graph') gpPollNow();
+  }, 600);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && document.documentElement.dataset.page === 'graph') gpPollNow();
+  });
+}
+
+function gpUpdateSource() {
+  const n = GP.dev.netlist || {}, p = GP.dev.params || {};
+  $('gpNetlist').textContent = n.valid ? (gpFmtBytes(n.len) + ' · CRC ' + gpU32(n.crc).toString(16).toUpperCase()) : '无';
+  $('gpParams').textContent = p.valid ? (gpFmtBytes(p.len) + ' · CRC ' + gpU32(p.crc).toString(16).toUpperCase()) : '无';
+  if (!n.valid && !p.valid) {
+    $('gpSum').textContent = '设备上暂无数据';
+  } else {
+    $('gpSum').textContent = (n.valid ? '拓扑已导入' : '缺 NetList')
+      + ' · ' + (p.valid ? '参数已导入' : '缺 params');
+  }
+}
+
+/* 从设备把两份文件拉回来解析 */
+async function gpLoadFromDevice() {
+  GP.busy = true;
+  try {
+    let nl = null, pa = null;
+    if (GP.dev.netlist.valid) {
+      const r = await fetch('/api/graph/netlist', { cache: 'no-store' });
+      if (r.ok) nl = await r.text();
+    }
+    if (GP.dev.params.valid) {
+      const r = await fetch('/api/graph/params', { cache: 'no-store' });
+      if (r.ok) pa = await r.text();
+    }
+    gpBuild(nl, pa);
+    GP.loaded.netlist = GP.dev.netlist.valid ? gpU32(GP.dev.netlist.crc) : 0;
+    GP.loaded.params = GP.dev.params.valid ? gpU32(GP.dev.params.crc) : 0;
+    /* 新工程文件 → 按名字重新解析绑定，把地址换到新位置（用户不需要做任何事）。
+     * ⚠️ 必须先重新拉一次完整绑定（含 key）：设备端 key 可能刚被迁移补上，
+     * 页面加载时 bindFetch 拿到的还是旧数据（key 空），不重拉会漏掉。 */
+    await bindFetch();
+    await bindAutoResolve();
+    /* EQ 也一样：先拉设备上存的系数（它们才是“当前值”），再按名字重解析地址 */
+    await eqFetch();
+    await eqAutoResolve();
+  } catch (e) {
+    toast('读取设备数据失败：' + e.message, 'err', 4000);
+  } finally {
+    GP.busy = false;
+  }
+}
+
+/* ================== 构建视图 ================== */
+function gpBuild(netlistText, paramsText) {
+  if (paramsText != null) GP.params = gpParseParams(paramsText);
+  if (netlistText != null) {
+    try {
+      const r = gpParseNetlist(netlistText);
+      GP.nodes = r.nodes;
+      GP.links = r.links;
+    } catch (e) {
+      toast('NetList 解析失败：' + e.message, 'err', 5000);
+      GP.nodes = []; GP.links = [];
+    }
+  }
+  if (!GP.nodes.length && GP.params.length) {
+    /* 只有 .params：退回「按 cell 列方块」的清单模式（没有连线） */
+    const cells = [];
+    const seen = new Set();
+    GP.params.forEach(p => {
+      if (gpKind(p.cell, p).k === 'internal') return;
+      if (seen.has(p.cell)) return;
+      seen.add(p.cell);
+      cells.push(p.cell);
+    });
+    GP.nodes = cells.map((c, i) => ({
+      id: i, name: '', friendly: '仅参数文件', cell: c,
+      x: 0, y: i * 10, gw: 0, gb: 0, ins: [], outs: []
+    }));
+    GP.links = [];
+  }
+
+  GP.sel = -1;
+  GP.live.clear();
+  GP.eqWords.clear();           /* 系数缓存按地址键，重新解析后必须清掉 */
+  GP.vb = null;                 /* 重新布局后必须重置视图，否则会停在旧坐标系 */
+  gpUpdateStat();
+  gpRender();
+  gpPanel();
+  gpBuildList();
+  eqRenderCard();
+}
+
+/* 模块跳转列表：信号链很长，一屏看不全，给个名字列表直接选 */
+function gpBuildList() {
+  const sel = $('gpPick');
+  if (!sel) return;
+  let h = '<option value="-1">— 选择模块（按信号顺序）—</option>';
+  GP.nodes.forEach((n, i) => {
+    const nm = (n.cell || n.name || ('#' + i));
+    const cls = gpClassOfNode(n);
+    const mark = cls === 'rweq' ? '〔EQ可调〕' : (cls === 'rw' ? '〔可调〕' : '');
+    h += '<option value="' + i + '">' + gpX(mark + nm) + '</option>';
+  });
+  sel.innerHTML = h;
+  sel.value = GP.sel >= 0 ? String(GP.sel) : '-1';
+}
+
+function gpUpdateStat() {
+  const cells = new Set(GP.params.map(p => p.cell));
+  let rw = 0, eq = 0, ro = 0;
+  GP.params.forEach(p => {
+    const k = gpKind(p.cell, p).k;
+    if (k === 'gain' || k === 'switch' || k === 'mixgain') rw++;
+    else if (k === 'eq') eq++;
+    else if (k !== 'internal') ro++;
+  });
+  $('gpStat').textContent = GP.nodes.length + ' 个模块 · ' + cells.size + ' 个 cell · '
+    + GP.params.length + ' 个参数（可调 ' + (rw + eq) + ' [含 EQ ' + eq + '] / 只读 ' + ro + '）';
+}
+
+/* ================== 上传 ================== */
+async function gpUploadOne(which, text, label) {
+  const r = await fetch('/api/graph/' + which, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    body: text
+  });
+  const t = (await r.text()).trim();
+  if (!r.ok) throw new Error(t || ('HTTP ' + r.status));
+  return t;
+}
+
+async function gpHandleFiles(files) {
+  const list = Array.from(files);
+  if (!list.length) return;
+  $('gpBar').classList.add('on');
+  let done = 0;
+  const setProg = () => {
+    $('gpFill').style.width = Math.round(done / list.length * 100) + '%';
+  };
+  setProg();
+
+  let gotNl = null, gotPa = null;
+  for (const f of list) {
+    try {
+      const buf = await f.arrayBuffer();
+      const text = gpDecode(buf);
+      const isNl = /<NetList[\s>]/i.test(text.slice(0, 4000));
+      const isPa = /Parameter\s+Address\s*=/.test(text.slice(0, 4000));
+      if (isNl) {
+        await gpUploadOne('netlist', text, f.name);
+        gotNl = text;
+        toast('已保存拓扑 ' + f.name, 'ok', 2200);
+      } else if (isPa) {
+        await gpUploadOne('params', text, f.name);
+        gotPa = text;
+        toast('已保存参数 ' + f.name, 'ok', 2200);
+      } else {
+        toast('跳过 ' + f.name + '：看不出是 NetList 还是 params', 'err', 4200);
+      }
+    } catch (e) {
+      toast(f.name + ' 上传失败：' + e.message, 'err', 5000);
+    }
+    done++;
+    setProg();
+  }
+  $('gpFill').style.width = '100%';
+  setTimeout(() => $('gpBar').classList.remove('on'), 900);
+
+  /* 先本地解析（立刻能看到），再用设备 CRC 兜底重取 */
+  gpBuild(gotNl, gotPa);
+  try {
+    const r = await fetch('/api/graph', { cache: 'no-store' });
+    if (r.ok) { gpApplyDevice(await r.json()); }
+  } catch (_) {}
+}
+
+/* ================== 交互 ================== */
+function gpOnShow() {
+  /* 切到这一页时 svg 才有真实尺寸；顺便补一次数据与刷新 */
+  setTimeout(() => {
+    if (GP.vb && GP.vbValid) gpApplyVB();
+    else if (GP.content) gpDefaultView();
+    gpPollNow();
+  }, 20);
+}
+
+(function gpInitUi() {
+  const drop = $('gpDrop'), file = $('gpFile');
+  if (!drop) return;
+
+  drop.addEventListener('click', () => file.click());
+  file.addEventListener('change', () => { gpHandleFiles(file.files); file.value = ''; });
+
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.add('drag');
+  }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.remove('drag');
+  }));
+  drop.addEventListener('drop', e => {
+    if (e.dataTransfer && e.dataTransfer.files) gpHandleFiles(e.dataTransfer.files);
+  });
+  /* 整页拖放也接住，免得浏览器直接打开文件把页面顶掉 */
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => {
+    e.preventDefault();
+    if (document.documentElement.dataset.page === 'graph' && e.dataTransfer && e.dataTransfer.files.length) {
+      gpHandleFiles(e.dataTransfer.files);
+    }
+  });
+
+  $('gpClear').addEventListener('click', async () => {
+    if (!confirm('清除设备上保存的连线图数据？')) return;
+    try {
+      await postJSON('/api/graph', { action: 'clear' });
+      GP.nodes = []; GP.links = []; GP.params = []; GP.sel = -1; GP.live.clear();
+      GP.loaded = { netlist: 0, params: 0 };
+      gpBuild(null, null);
+      gpPanel();
+      $('gpStat').textContent = '—';
+      toast('设备数据已清除', 'ok');
+    } catch (e) {
+      toast('清除失败：' + e.message, 'err', 4000);
+    }
+  });
+
+  $('gpZoomIn').addEventListener('click', () => {
+    if (!GP.vb) return;
+    gpZoom(0.8, GP.vb.x + GP.vb.w / 2, GP.vb.y + GP.vb.h / 2);
+  });
+  $('gpZoomOut').addEventListener('click', () => {
+    if (!GP.vb) return;
+    gpZoom(1.25, GP.vb.x + GP.vb.w / 2, GP.vb.y + GP.vb.h / 2);
+  });
+  $('gpFit').addEventListener('click', gpFit);
+  $('gpFull').addEventListener('click', () => gpSetFull(!gpFs));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && gpFs) gpSetFull(false);
+  });
+  window.addEventListener('resize', () => { if (gpFs) gpRefitView(); });
+
+  $('gpAuto').addEventListener('change', () => {
+    GP.auto = $('gpAuto').checked;
+    GP.sel = -1;
+    gpRender();
+    gpFit();
+    gpPanel();
+  });
+
+  const wrap = $('gpWrap'), svg = $('gpSvg');
+  wrap.addEventListener('wheel', e => {
+    if (!GP.vb) return;
+    e.preventDefault();
+    const rect = wrap.getBoundingClientRect();
+    /* 屏幕坐标 → viewBox 坐标（考虑 preserveAspectRatio 的 letterbox 缩放） */
+    const sc = Math.min(rect.width / GP.vb.w, rect.height / GP.vb.h);
+    const ox = (rect.width - GP.vb.w * sc) / 2;
+    const oy = (rect.height - GP.vb.h * sc) / 2;
+    const cx = GP.vb.x + (e.clientX - rect.left - ox) / sc;
+    const cy = GP.vb.y + (e.clientY - rect.top - oy) / sc;
+    gpZoom(e.deltaY > 0 ? 1.12 : 0.89, cx, cy);
+  }, { passive: false });
+
+  let drag = null;
+  /*
+   * ⚠️ `setPointerCapture` 只能在**真的开始拖动之后**调用。
+   * 如果在 pointerdown 里就捕获，后续的 pointerup / click 会被重定向到 wrap，
+   * 于是 svg 上委托的 click（`e.target.closest('.nd')`）永远拿不到方块 ——
+   * 表现就是「方块点不动，只有右边的下拉框能选中」。很隐蔽，实测才踩到。
+   */
+  wrap.addEventListener('pointerdown', e => {
+    if (!GP.vb) return;
+    drag = { x: e.clientX, y: e.clientY, vx: GP.vb.x, vy: GP.vb.y,
+             moved: false, id: e.pointerId };
+  });
+  wrap.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved) {
+      if (Math.abs(dx) + Math.abs(dy) < 4) return;   /* 小抖动不算拖动，交给 click 选中 */
+      drag.moved = true;
+      wrap.classList.add('grabbing');
+      try { wrap.setPointerCapture(drag.id); } catch (_) {}
+    }
+    const rect = wrap.getBoundingClientRect();
+    const sc = Math.min(rect.width / GP.vb.w, rect.height / GP.vb.h);
+    GP.vb = { x: drag.vx - dx / sc, y: drag.vy - dy / sc, w: GP.vb.w, h: GP.vb.h };
+    gpApplyVB();
+  });
+  ['pointerup', 'pointercancel'].forEach(ev => wrap.addEventListener(ev, () => {
+    if (drag && drag.moved) {
+      try { wrap.releasePointerCapture(drag.id); } catch (_) {}
+    }
+    wrap.classList.remove('grabbing');
+    drag = null;
+  }));
+
+  svg.addEventListener('click', e => {
+    const g = e.target.closest ? e.target.closest('.nd') : null;
+    if (!g) return;
+    gpSelect(+g.dataset.i);
+  });
+
+  const pick = $('gpPick');
+  if (pick) pick.addEventListener('change', () => {
+    const i = +pick.value;
+    if (i < 0) return;
+    gpSelect(i);
+    gpCenterOn(i);
+  });
+})();
+
+/* ============================================================
+ * 首页 EQ：选一个滤波器模块，直接调它的各段
+ * 模块列表与地址全部来自「连线图」页导入的工程文件（不硬编码）。
+ * ============================================================ */
+/* 每个滤波器模块一种颜色（16 色，分频总览时足够区分所有通道） */
+const GP_EQ_COLORS2 = ['#5b8cff', '#35e0c8', '#ff9f43', '#c98bff',
+                       '#3fd07a', '#ff6e9c', '#ffd479', '#7ad0ff',
+                       '#a3ff6b', '#ff7ad0', '#6be0ff', '#ffb14d',
+                       '#7aa8ff', '#4dffb1', '#ff6e6e', '#b4ff4d'];
+function gpEqColor(i) { return GP_EQ_COLORS2[i % GP_EQ_COLORS2.length]; }
+
+/* 首页 EQ 状态：勾选集合 + 拖动草稿 + 上一帧图表的坐标映射 */
+const EQP = { checked: new Set(), draft: {}, chart: null, inited: false };
+
+function eqEqNodes() {
+  return GP.nodes.filter(n => gpNodeControls(n).some(p => gpKind(n.cell, p).k === 'eq'));
+}
+
+function eqBandsOfNode(n) {
+  return gpNodeControls(n).filter(p => p.data && p.data.length >= 20 &&
+                                       gpKind(n.cell, p).k === 'eq');
+}
+
+/* 勾选中的滤波器（一个模块 = 一条总响应曲线 = 一种颜色） */
+function eqActiveFilters() {
+  const out = [];
+  eqEqNodes().forEach((n, i) => {
+    if (!EQP.checked.has(n.id)) return;
+    const bands = eqBandsOfNode(n);
+    if (!bands.length) return;
+    out.push({ n: n, color: gpEqColor(i), bands: bands });
+  });
+  return out;
+}
+
+/* 勾选中滤波器的段扁平化（表格用，带模块颜色） */
+function eqFlatBands() {
+  const out = [];
+  eqEqNodes().forEach((n, i) => {
+    if (!EQP.checked.has(n.id)) return;
+    eqBandsOfNode(n).forEach(p => out.push({ n: n, color: gpEqColor(i), p: p }));
+  });
+  return out;
+}
+
+/* 某段当前“生效”系数/参数：优先用拖动草稿，否则按已写入系数反推 */
+function eqBandLive(p) {
+  const d = EQP.draft[p.addr];
+  if (d) {
+    return { words: gpEqWordsFrom(d.type, d.f, d.q, d.db),
+             type: d.type, f: d.f, q: d.q, db: d.db };
+  }
+  const w = gpEqWordsOf(p);
+  const desc = gpEqDescribe(w);
+  return { words: w, type: desc.guess, f: desc.f, q: desc.q, db: desc.db };
+}
+
+function eqRenderFilters() {
+  const box = $('eqFilters');
+  if (!box) return;
+  const nodes = eqEqNodes();
+  /* 首次渲染自动全选：分频总览最常用的是“一眼看全所有通道”，可再逐个取消 */
+  if (!EQP.inited && nodes.length) {
+    EQP.inited = true;
+    nodes.forEach(n => EQP.checked.add(n.id));
+  }
+  let h = '';
+  nodes.forEach((n, i) => {
+    const on = EQP.checked.has(n.id);
+    h += '<label class="eqfilter' + (on ? ' on' : '') + '">'
+       + '<input type="checkbox" class="eqck" value="' + n.id + '"' + (on ? ' checked' : '') + '>'
+       + '<i style="background:' + gpEqColor(i) + '"></i>'
+       + '<span class="efname">' + gpX(n.cell || n.name) + '</span>'
+       + '<span class="efcnt">' + eqBandsOfNode(n).length + '段</span></label>';
+  });
+  box.innerHTML = h;
+  Array.from(box.querySelectorAll('.eqck')).forEach(ck => {
+    ck.addEventListener('change', () => {
+      const id = +ck.value;
+      if (ck.checked) EQP.checked.add(id); else EQP.checked.delete(id);
+      ck.closest('.eqfilter').classList.toggle('on', ck.checked);
+      eqRenderCard();
+    });
+  });
+  $('eqHint').textContent = nodes.length
+    ? (nodes.length + ' 个滤波器 · 勾选叠加显示 · 拖动频点调频率/增益（松手写入并保存）')
+    : '未找到滤波器模块（请先在「连线图」导入工程文件）';
+}
+
+function eqRenderCard() {
+  const chart = $('eqChart');
+  if (!chart) return;
+  eqRenderFilters();
+  const flat = eqFlatBands();
+  const wrap = $('eqTabWrap');
+  if (!flat.length) {
+    chart.innerHTML = '';
+    $('eqLegend').textContent = '—';
+    $('eqInfo').textContent = GP.params.length
+      ? '勾选上方的滤波器以叠加显示频谱'
+      : '请先在「连线图」页导入 SigmaStudio 导出的工程文件';
+    $('eqBands').innerHTML = '';
+    if (wrap) wrap.hidden = true;
+    return;
+  }
+  let h = '';
+  flat.forEach((b, i) => { h += gpEqBandHtml(b.p, i, true, b.color); });
+  $('eqBands').innerHTML = h;
+  if (wrap) wrap.hidden = false;
+  eqMarkSaved();
+  eqRedraw();
+  gpEqBandBind($('eqBands'), addr => {
+    const hit = eqFlatBands().find(x => x.p.addr === addr);
+    return hit ? hit.p : null;
+  }, eqRedraw);
+}
+
+function eqRedraw() {
+  const filters = eqActiveFilters();
+  const svg = $('eqChart');
+  if (!filters.length || !svg) { EQP.chart = null; return; }
+  const r = gpDrawEqOverlay(svg, filters, 640, 210);
+  EQP.chart = r;
+  $('eqLegend').innerHTML = filters.map(f =>
+    '<span><i style="background:' + f.color + '"></i>' + gpX(f.n.cell || f.n.name)
+    + ' · ' + f.bands.length + '段</span>').join('');
+  $('eqInfo').textContent = filters.length + ' 个滤波器叠加 · 纵轴 ' + r.lo.toFixed(0)
+    + '~' + r.hi.toFixed(0) + ' dB · 拖动频点调频率/增益';
+  /* 各段行头同步刷新（不重建输入框，否则正在输入的值会被冲掉） */
+  const flat = eqFlatBands();
+  Array.from($('eqBands').querySelectorAll('.eqband')).forEach((box, i) => {
+    const b = flat[i], ba = box.querySelector('.ba');
+    if (!b || !ba) return;
+    ba.textContent = gpEqStatText(b.p.addr, gpEqDescribe(gpEqWordsOf(b.p)));
+  });
+  eqMarkSaved();
+}
+
+/* 拖动结束后，把该频点的输入框同步到新值（否则再次“应用”会用旧值覆盖拖动结果） */
+function eqSyncRowInputs(addr) {
+  const flat = eqFlatBands();
+  const row = Array.from($('eqBands').querySelectorAll('.eqband'))
+    .find(box => +box.dataset.eqaddr === addr);
+  if (!row) return;
+  const b = flat.find(x => x.p.addr === addr);
+  if (!b) return;
+  const d = gpEqDescribe(gpEqWordsOf(b.p));
+  const t = row.querySelector('.eqt'); if (t) t.value = d.guess;
+  const f = row.querySelector('.eqf'); if (f) f.value = Math.round(d.f);
+  const q = row.querySelector('.eqq'); if (q) q.value = d.q.toFixed(2);
+  const gg = row.querySelector('.eqg'); if (gg) gg.value = d.db.toFixed(1);
+}
+
+/* 拖动结束：把草稿写进 DSP 并保存到设备 */
+async function eqCommitDrag(addr, d) {
+  if (!d) return;
+  const hit = eqFlatBands().find(b => b.p.addr === addr);
+  if (!hit) { eqRedraw(); return; }
+  const w = gpEqWordsFrom(d.type, d.f, d.q, d.db);
+  if (!gpEqStableWords(w)) { toast('该位置不稳定，已还原', 'err'); eqRedraw(); return; }
+  try {
+    await postJSON('/api/dsp', { addr: addr, hex: gpEqHex(w) });
+    GP.eqWords.set(addr, w);
+    const back = await gpEqReadBack(addr);
+    if (back) GP.eqWords.set(addr, back);
+    await eqPersist(hit.p, back || w);
+    toast('已写入并保存', 'ok', 1400);
+  } catch (err) {
+    toast('写入失败：' + err.message, 'err', 3000);
+  }
+  eqSyncRowInputs(addr);
+  eqRedraw();
+}
+
+/* 图上频点拖动：水平=频率，垂直=增益（仅 peak/搁架有增益），松手写入 */
+function eqBindDrag() {
+  const svg = $('eqChart');
+  if (!svg) return;
+  let drag = null;
+  svg.addEventListener('pointerdown', e => {
+    const el = e.target.closest ? e.target.closest('.eqpt') : null;
+    const r = EQP.chart;
+    if (!el || !r) return;
+    const addr = +el.dataset.addr;
+    let found = null;
+    r.groups.forEach(g => g.bands.forEach(b => { if (b.p.addr === addr) found = b; }));
+    if (!found) return;
+    const live = found.live;
+    const hasGain = (live.type === 'peak' || live.type === 'lowshelf' || live.type === 'highshelf');
+    drag = { addr: addr, type: live.type, q: live.q, f0: live.f, db0: live.db, hasGain: hasGain };
+    svg.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  svg.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const r = EQP.chart;
+    if (!r) return;
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = (e.clientX - rect.left) * (r.w / rect.width);
+    const yy = (e.clientY - rect.top) * (r.h / rect.height);
+    const f = gpClamp(r.xf(x), r.fMin, r.fMax);
+    const db = drag.hasGain ? gpClamp(r.yd(yy), -18, 18) : drag.db0;
+    EQP.draft[drag.addr] = { type: drag.type, f: f, q: drag.q, db: db };
+    eqRedraw();
+  });
+  const end = () => {
+    if (!drag) return;
+    const d = EQP.draft[drag.addr];
+    delete EQP.draft[drag.addr];
+    const addr = drag.addr;
+    drag = null;
+    eqCommitDrag(addr, d);
+  };
+  svg.addEventListener('pointerup', end);
+  svg.addEventListener('pointercancel', end);
+}
+
+async function eqReadLive() {
+  const flat = eqFlatBands();
+  if (!flat.length) { toast('先勾选滤波器', 'err'); return; }
+  let n = 0;
+  for (const b of flat) {
+    const w = await gpEqReadBack(b.p.addr);
+    if (w) { GP.eqWords.set(b.p.addr, w); n++; }
+  }
+  eqRenderCard();
+  toast(n ? ('已读取 ' + n + ' 段当前系数') : '读取失败', n ? 'ok' : 'err');
+}
+
+/* ============================================================
+ * EQ 系数保存到设备（上电 / 固件重推后自动写回）
+ *
+ * 为什么要设备端也存一份：网页上把 EQ 调好之后，1452 断电重启、或固件映像被
+ * 自动重推时，DSP 里的系数会被冲回「录制映像那一刻的值」——用户会觉得白调了。
+ * 存在设备 NVS 里之后，每次 DSP 就绪 / 映像重推都会自动重放一遍。
+ *
+ * 存的 key 是 "cell|parameter"（和首页控件绑定同一套约定）：换 DSP 程序后
+ * 地址会整体平移，而名字不会，所以重导工程文件后可以自动把地址重新解析回来。
+ * ============================================================ */
+const EQKEY = p => (p.cell || '') + '|' + (p.name || '');
+let eqStore = {};        /* "cell|parameter" → {addr, key, w:[5]} */
+
+async function eqFetch() {
+  try {
+    const r = await fetch('/api/eq', { cache: 'no-store' });
+    if (!r.ok) return;
+    const j = await r.json();
+    eqStore = {};
+    (j.bands || []).forEach(b => {
+      const k = b.key || ('@' + b.addr);
+      b.w = (b.w || []).map(x => x >>> 0);
+      eqStore[k] = b;
+      /* 保存的系数就是「用户要的值」，优先于工程文件里的初值 */
+      if (b.w.length >= 5) GP.eqWords.set(b.addr, b.w);
+    });
+    eqMarkSaved();
+    if (j.count) eqRedraw();
+  } catch (_) { /* 离线也无所谓 */ }
+}
+
+/* 把「已保存 / 未保存」的小标刷新到表格上 */
+function eqMarkSaved() {
+  const box = $('eqBands');
+  if (!box) return;
+  Array.from(box.querySelectorAll('.eqband')).forEach(row => {
+    const tag = row.querySelector('.eqsave');
+    if (!tag) return;
+    const p = eqParamOfAddr(+row.dataset.eqaddr);
+    const b = p ? eqStore[EQKEY(p)] : null;
+    const ok = !!(b && b.addr === +row.dataset.eqaddr);
+    tag.className = 'eqsave' + (ok ? '' : ' none');
+    tag.textContent = ok ? '已存 · 开机恢复' : '未保存';
+    tag.title = ok ? '已存到设备，1452 断电重启或固件重推后会自动写回'
+                   : '点「应用」后会存到设备';
+  });
+}
+
+function eqParamOfAddr(addr) {
+  return GP.params.find(p => p.addr === addr) || null;
+}
+
+/* 一段调好后存到设备（含写入 DSP，设备端会一起做） */
+async function eqPersist(p, w) {
+  const key = EQKEY(p);
+  try {
+    const j = await postJSON('/api/eq',
+      { action: 'put', addr: p.addr, key: key, w: w.map(x => x >>> 0) });
+    eqStore[key] = { addr: p.addr, key: key, w: w.map(x => x >>> 0) };
+    eqMarkSaved();
+    if (j && j.msg) toast(j.msg, j.ok ? 'ok' : 'err', 2800);
+  } catch (e) {
+    toast('保存到设备失败：' + e.message, 'err', 4000);
+  }
+}
+
+async function eqForget(p) {
+  const key = EQKEY(p);
+  try {
+    await postJSON('/api/eq', { action: 'del', key: key, addr: p.addr });
+    delete eqStore[key];
+    eqMarkSaved();
+  } catch (_) {}
+}
+
+/*
+ * 换工程文件后按名字把地址重新解析一遍（与 bindAutoResolve 同一套思路）。
+ * 用户只需要重新导入 NetSuite/params，地址平移了也能自动跟上。
+ */
+async function eqAutoResolve() {
+  if (!GP.params.length) return;
+  const keys = Object.keys(eqStore);
+  if (!keys.length) return;
+  let changed = 0;
+  for (const k of keys) {
+    const b = eqStore[k];
+    const i = k.indexOf('|');
+    const cell = i < 0 ? '' : k.slice(0, i);
+    const pname = i < 0 ? '' : k.slice(i + 1);
+    if (!cell || !pname || !b.w || b.w.length < 5) continue;
+    const hit = GP.params.find(p => p.cell === cell && p.name === pname);
+    if (!hit || hit.addr === b.addr) continue;
+    try {
+      await postJSON('/api/eq',
+        { action: 'put', addr: hit.addr, key: k, w: b.w.map(x => x >>> 0) });
+      /* 地址变了：旧地址上的系数缓存作废 */
+      GP.eqWords.delete(b.addr);
+      b.addr = hit.addr;
+      GP.eqWords.set(hit.addr, b.w);
+      changed++;
+    } catch (_) {}
+  }
+  if (changed) {
+    toast('检测到新的工程文件，已自动更新 ' + changed + ' 段 EQ 的地址', 'ok', 4500);
+    eqRenderCard();
+  }
+}
+
+/* ============================================================
+ * 首页控件绑定：把 4 个音量通道 + 左右电平对到具体参数上
+ * 存的是「cell|parameter」，换工程文件后能自动重新解析。
+ * ============================================================ */
+const BIND_LABELS = ['MASTER', 'LOW', 'HIGH', 'MID', 'LEVEL L', 'LEVEL R'];
+/* 音量卡片管 4 个增益槽，电平卡片管 2 个电平槽。
+   ⚠️ 两个齿轮以前都把 6 行全列出来，内容看着完全重复；
+   现在按卡片分片显示，但保存时仍然整体提交（没显示的那几行用原值带上）。 */
+const BIND_SCOPE = { vol: [0, 1, 2, 3], lv: [4, 5], all: [0, 1, 2, 3, 4, 5] };
+let bindFull = null;      /* GET /api/bind 的完整内容（含 key） */
+let bindLastKey = '';     /* 避免每帧都重建提示文本 */
+
+function bindKeyOf(n, p) { return (n.cell || n.name) + '|' + p.name; }
+
+function bindCellOfKey(k) {
+  const i = String(k || '').indexOf('|');
+  return i < 0 ? '' : k.slice(0, i);
+}
+
+/* 候选参数：音量槽只列增益类，电平槽只列电平类（避免绑了不能用） */
+function bindCandidates(slot) {
+  const wantLevel = slot >= 4;
+  const out = [];
+  GP.nodes.forEach(n => {
+    gpParamsForNode(n).forEach(p => {
+      const k = gpKind(n.cell, p).k;
+      if (wantLevel ? (k === 'level') : (k === 'gain')) {
+        out.push({ addr: p.addr, key: bindKeyOf(n, p),
+                   label: (n.cell || n.name) + ' · ' + gpShortName(n, p) + '  @' + p.addr });
+      }
+    });
+  });
+  return out;
+}
+
+function bindShortCell(s) {
+  s = String(s || '');
+  return s.length > 18 ? s.slice(0, 17) + '…' : s;
+}
+
+/* 一行一个小标签：MASTER Single 1_8 */
+function bindChip(i, b) {
+  const cell = bindCellOfKey(b && b.key);
+  const name = cell || ('地址 ' + ((b && b.addr) || '?'));
+  return '<span class="bd" title="' + gpX(cell || name) + '"><b>' + BIND_LABELS[i]
+       + '</b><i>' + gpX(bindShortCell(name)) + '</i></span>';
+}
+
+function bindUpdateHints() {
+  if (!bindFull) return;
+  const k = JSON.stringify(bindFull.map(b => [b.addr, b.key]));
+  if (k === bindLastKey) return;
+  bindLastKey = k;
+  const chips = [];
+  for (let i = 0; i < 6; i++) chips.push(bindChip(i, bindFull[i] || {}));
+  const v = $('volBindInfo');
+  if (v) v.innerHTML = chips.slice(0, 4).join('');
+  const l = $('lvBindInfo');
+  if (l) l.innerHTML = chips.slice(4, 6).join('');
+}
+
+async function bindFetch() {
+  try {
+    const r = await fetch('/api/bind', { cache: 'no-store' });
+    if (!r.ok) return;
+    const j = await r.json();
+    bindFull = j.slots || [];
+    bindUpdateHints();
+  } catch (_) { /* 离线也无所谓 */ }
+}
+
+/* 状态帧里的简版绑定（名字+地址），用于保险地同步一次 */
+function bindFromState(arr) {
+  if (bindFull || !Array.isArray(arr)) return;   /* 有完整版就以它为准 */
+  window.__bindLite = arr;
+}
+
+function bindOpen(scope) {
+  if (!GP.params.length) {
+    toast('请先在「连线图」页导入 SigmaStudio 导出的工程文件', 'err', 4500);
+    return;
+  }
+  const cur = bindFull || (window.__bindLite || []).map(b => ({ addr: b.a, name: b.n, key: '' }));
+  const rows = $('bindRows');
+  const list = BIND_SCOPE[scope] || BIND_SCOPE.all;
+  const cands = [];
+  let h = '';
+  const title = $('bindTitle');
+  if (title) {
+    title.textContent = scope === 'vol' ? '音量控件绑定'
+      : scope === 'lv' ? '电平控件绑定' : '控件绑定';
+  }
+  const sub = $('bindSub');
+  if (sub) {
+    sub.textContent = scope === 'lv'
+      ? '电平表是只读的，只选参数位置就行'
+      : '换 DSP 程序后地址会变，这里按模块名重新对一次即可';
+  }
+  for (const i of list) {
+    cands[i] = bindCandidates(i);
+    const c0 = cur[i] || { addr: 0, key: '' };
+    h += '<div class="brow"><span class="bl">' + BIND_LABELS[i] + '</span><select data-slot="'
+       + i + '">';
+    h += '<option value="0"' + (c0.addr ? '' : ' selected') + '>（默认地址）</option>';
+    let found = false;
+    cands[i].forEach((c, ci) => {
+      const sel = (c.addr === c0.addr);
+      if (sel) found = true;
+      h += '<option value="' + (ci + 1) + '"' + (sel ? ' selected' : '') + '>'
+         + gpX(c.label) + '</option>';
+    });
+    if (c0.addr && !found) {
+      h += '<option value="-1" selected>当前：地址 ' + c0.addr
+         + (bindCellOfKey(c0.key) ? '（' + gpX(bindCellOfKey(c0.key)) + '）' : '') + '</option>';
+    }
+    h += '</select></div>';
+  }
+  rows.innerHTML = h;
+  window.__bindCands = cands;
+  window.__bindCur = cur;
+  window.__bindScope = list;
+  $('bindModal').classList.add('on');
+}
+
+async function bindSave() {
+  const cur = window.__bindCur || [];
+  const cands = window.__bindCands || [];
+  const scope = window.__bindScope || BIND_SCOPE.all;
+  const shown = {};
+  scope.forEach(i => { shown[i] = true; });
+  const slots = [];
+  for (let i = 0; i < 6; i++) {
+    /* 不在当前卡片上的槽：原样带回，不然会把别处的绑定抹掉 */
+    if (!shown[i]) {
+      const c0 = cur[i] || {};
+      slots.push({ idx: i, addr: c0.addr || 0, name: BIND_LABELS[i], key: c0.key || '' });
+      continue;
+    }
+    const sel = $('bindRows').querySelector('select[data-slot="' + i + '"]');
+    if (!sel) {
+      const c0 = cur[i] || {};
+      slots.push({ idx: i, addr: c0.addr || 0, name: BIND_LABELS[i], key: c0.key || '' });
+      continue;
+    }
+    const v = parseInt(sel.value, 10);
+    if (v === 0) {
+      slots.push({ idx: i, addr: 0, name: BIND_LABELS[i], key: '' });
+    } else if (v === -1) {
+      const c0 = cur[i] || {};
+      slots.push({ idx: i, addr: c0.addr || 0, name: BIND_LABELS[i], key: c0.key || '' });
+    } else {
+      const c = (cands[i] || [])[v - 1];
+      if (!c) { slots.push({ idx: i, addr: 0, name: BIND_LABELS[i], key: '' }); continue; }
+      slots.push({ idx: i, addr: c.addr, name: BIND_LABELS[i], key: c.key });
+    }
+  }
+  try {
+    await postJSON('/api/bind', { slots: slots });
+    $('bindModal').classList.remove('on');
+    bindFull = slots.map(s => ({ addr: s.addr, name: s.name, key: s.key }));
+    bindLastKey = '';
+    bindUpdateHints();
+    await bindFetch();          /* 以设备实际生效的地址为准 */
+    toast('绑定已保存并生效', 'ok');
+  } catch (e) {
+    toast('保存失败：' + e.message, 'err', 4500);
+  }
+}
+
+/*
+ * 名字 → 新地址的自动重解析。
+ * 这是「以后换 DSP 程序不用改固件」的关键：拿到新解析出来的 .params 后，
+ * 把绑定里存的 "cell|parameter" 重新查一遍，地址变了就写回设备。
+ */
+async function bindAutoResolve() {
+  if (!bindFull || !GP.params.length) return;
+  const slots = [];
+  let changed = false;
+  for (let i = 0; i < 6; i++) {
+    const b = bindFull[i] || { addr: 0, name: BIND_LABELS[i], key: '' };
+    let addr = b.addr || 0;
+    const cell = bindCellOfKey(b.key);
+    const pname = b.key ? b.key.slice(cell.length + 1) : '';
+    if (cell && pname) {
+      const hit = GP.params.find(p => p.cell === cell && p.name === pname);
+      if (hit && hit.addr !== addr) {
+        ESPLOGS(i, addr, hit.addr, b.key);
+        addr = hit.addr;
+        changed = true;
+      }
+    }
+    slots.push({ idx: i, addr: addr, name: b.name || BIND_LABELS[i], key: b.key || '' });
+  }
+  if (!changed) return;
+  try {
+    await postJSON('/api/bind', { slots: slots });
+    bindFull = slots.map(s => ({ addr: s.addr, name: s.name, key: s.key }));
+    bindLastKey = '';
+    bindUpdateHints();
+    toast('检测到新的工程文件，已自动更新控件绑定的地址', 'ok', 4200);
+  } catch (e) {
+    toast('自动更新绑定失败：' + e.message, 'err', 4500);
+  }
+}
+
+function ESPLOGS(i, from, to, key) {
+  /* 只记日志，便于排查"自动重解析到底做了什么" */
+  try { console.log('bind auto-resolve', BIND_LABELS[i], from, '->', to, key); } catch (_) {}
+}
+
+(function bindInitUi() {
+  const b = $('lvBind');
+  if (b) b.addEventListener('click', () => bindOpen('lv'));
+  const v = $('volBind');
+  if (v) v.addEventListener('click', () => bindOpen('vol'));
+  const ca = $('bindCloseBtn');
+  if (ca) ca.addEventListener('click', () => $('bindModal').classList.remove('on'));
+  const sa = $('bindSaveBtn');
+  if (sa) sa.addEventListener('click', bindSave);
+  const rb = $('bindResetBtn');
+  if (rb) rb.addEventListener('click', () => {
+    Array.from($('bindRows').querySelectorAll('select')).forEach(s => { s.value = '0'; });
+    toast('已选为默认，点「保存并应用」生效', 'info');
+  });
+  $('bindModal').addEventListener('click', e => {
+    if (e.target === $('bindModal')) $('bindModal').classList.remove('on');
+  });
+  const ab = $('eqAllBtn');
+  if (ab) ab.addEventListener('click', () => {
+    const nodes = eqEqNodes();
+    const all = nodes.length && EQP.checked.size !== nodes.length;
+    EQP.checked.clear();
+    if (all) nodes.forEach(n => EQP.checked.add(n.id));
+    ab.textContent = all ? '全不选' : '全选';
+    eqRenderCard();
+  });
+  const rl = $('eqReadBtn');
+  if (rl) rl.addEventListener('click', eqReadLive);
+  eqBindDrag();
+  /* 启动就拉一次完整绑定（含 key），这样卡片下方能显示"绑到了哪个模块" */
+  bindFetch();
+  /* 启动也拉一次设备上保存的 EQ 系数：它们才是"当前值"，
+     优先于工程文件里的初值（1452 重启后设备端会把这些值写回 DSP） */
+  eqFetch();
+})();
+
+connect();
+</script>
+</body>
+</html>
