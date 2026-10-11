@@ -7,6 +7,8 @@
 > ESP32-S3 通过 I2C 控制已烧录 SigmaStudio 工程的 ADAU1452 DSP，实现四路音量调节（总/低音/高音/中音）
 > 与左右声道电平显示，配合 EC11 编码器 + ST7789 屏幕的本地交互，以及 WiFi 网页远程控制。
 
+![ESP32-S3 + ST7789 屏幕 + EC11 编码器实物（屏幕显示实时电平与音量）](photo/hardware-screen.jpg)
+
 ---
 
 ## 一、功能
@@ -23,7 +25,45 @@
 
 ---
 
-## 二、硬件
+## 二、界面展示
+
+> 以下均为实机截图（屏幕截图取自设备自带的网页控制台）。
+
+### 屏幕（ST7789 320×240）
+
+| 本地控制页：电平条 + 四路音量 | SigmaStudio 桥接调试页 |
+|---|---|
+| ![屏幕：本地控制页](photo/hardware-screen.jpg) | ![屏幕：桥接调试页](photo/hardware-bridge.jpg) |
+
+- 左：本地模式，屏幕上半为左右声道电平条（渐变 + 峰值保持线），下半显示当前音量
+  （MASTER 为百分比，LOW / HIGH / MID 为 dB）。
+- 右：桥接模式，本地控制让位，整屏切换为调试页，实时显示 SigmaStudio 的连接数、读写报文数、
+  最近访问地址与应答耗时。
+
+### 网页控制台
+
+**首页** —— 左右声道电平表、四路音量（MASTER / LOW / HIGH / MID）、9 段 EQ 曲线与参数表，
+改动直接写入 DSP：
+
+![网页控制台首页](photo/web-home.jpg)
+
+**连线图** —— 导入 SigmaStudio 导出的 `*.NetList.xml` + `*.params` 后自动解析成信号流图，
+可点开方块在线调参（亮绿 = 有 EQ 可调 · 绿框 = 可调 · 橙框 = 只读）：
+
+![连线图页面](photo/web-graph.jpg)
+
+信号流全貌（39 个模块 / 52 条连线 / 2 个电平）：
+
+![信号流图全貌](photo/web-graph-full.jpg)
+
+**工具** —— SigmaStudio 桥接、DSP 程序映像（录制 / 4 槽位固件库 / 上电自动加载）、
+地址调试（含 I2C 频率）、固件 OTA 升级、设备日志：
+
+![工具页面](photo/web-tools.jpg)
+
+---
+
+## 三、硬件
 
 ### 开发板
 - ESP32-S3，**16MB Flash + 8MB PSRAM**
@@ -45,7 +85,7 @@
 
 ---
 
-## 三、ADAU1452 DSP 接口
+## 四、ADAU1452 DSP 接口
 
 ### I2C 通信
 - 设备地址：**7 位 `0x3B`**（写 `0x76` / 读 `0x77`）
@@ -74,7 +114,7 @@
 
 ---
 
-## 四、文件结构
+## 五、文件结构
 
 ```
 .
@@ -105,7 +145,7 @@
 
 ---
 
-## 五、编译与烧录
+## 六、编译与烧录
 
 ESP-IDF **v5.5.2**。工具路径按本机情况替换：
 
@@ -148,7 +188,7 @@ idf.py build
 
 ---
 
-## 六、使用
+## 七、使用
 
 ### 设备端
 - **旋转**编码器在当前选中音量上加减；**按下**在 总音量 / 低音 / 高音 / 中音 之间切换。
@@ -178,7 +218,7 @@ L/R 电平表 + 4 路滑块 + WiFi 信息。编译：`powershell -ExecutionPolic
 
 ---
 
-## 七、主要接口
+## 八、主要接口
 
 ### WebSocket `/ws`
 状态 JSON 推送（约 100ms 一帧）+ 命令 `{"cmd":"set","idx":N,"value":V}`
@@ -205,7 +245,7 @@ L/R 电平表 + 4 路滑块 + WiFi 信息。编译：`powershell -ExecutionPolic
 
 ---
 
-## 八、关键实现约束（改动前必读）
+## 九、关键实现约束（改动前必读）
 
 这些都是实测踩过的坑，**改之前先看这一节**：
 
@@ -213,7 +253,7 @@ L/R 电平表 + 4 路滑块 + WiFi 信息。编译：`powershell -ExecutionPolic
   SigmaStudio 会把多条请求合并进一个 TCP 段，若我们的多条应答在它处理一条的周期内连发，
   它一次 `recv` 全收走 → 解析错位 → **直接崩溃**。实测 2ms/5ms 会崩，15ms 起稳定，30ms 为默认。
   必须用 `esp_rom_delay_us()` 而非 `vTaskDelay()`（tick 是 10ms，精度太粗）。
-- ⚠️ **电平是 Q15 不是 8.24**（见第三节）。
+- ⚠️ **电平是 Q15 不是 8.24**（见第四节）。
 - ⚠️ **SPI 单次 DMA 上限 `1<<18 = 32768` 字节**，分块必须 ≤ 32KB，否则报
   `txdata transfer > hardware max supported len`。
 - ⚠️ **ST7789 用 `0x20 INVOFF`**（误用 `0x21 INVON` 会导致黑底变白、绿色变品红），
@@ -232,7 +272,7 @@ L/R 电平表 + 4 路滑块 + WiFi 信息。编译：`powershell -ExecutionPolic
 
 ---
 
-## 九、验证状态
+## 十、验证状态
 
 - ✅ ST7789 显示（颜色、方向、背光）、EC11 旋转方向与按键单次触发
 - ✅ ADAU1452 I2C 通信（启动读回总音量 `0x00804DCE` ≈ -6dB，与默认值吻合）
@@ -251,7 +291,7 @@ L/R 电平表 + 4 路滑块 + WiFi 信息。编译：`powershell -ExecutionPolic
 
 ---
 
-## 十、仓库说明与许可
+## 十一、仓库说明与许可
 
 ### 哪些内容没有进仓库
 
@@ -261,6 +301,7 @@ L/R 电平表 + 4 路滑块 + WiFi 信息。编译：`powershell -ExecutionPolic
 | `build/`、`sdkconfig` | 构建产物，约 150MB+，可由源码重建 |
 | `win-volume-ctl/dist/*.exe`、`*.log` | 编译产物，用 `build.ps1` 自行生成 |
 | `dsp_project/`、`tools/`、`docs/` | SigmaStudio 导出文件、PC 侧调试脚本与排查存档，**不随仓库发布** |
+| `photo/*.jpg` | README 展示用图；网页截图为**实机截图**，画面中带设备自身的局域网 IP |
 
 > 关于 `dsp_project/`：其中的 `*.xml`、`*_IC_1*.h` 由 **Analog Devices SigmaStudio 生成**，
 > 文件头带 ADI 版权声明（*"may not be distributed whole or in any part to third parties"*），
