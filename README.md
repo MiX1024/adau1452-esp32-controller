@@ -327,21 +327,6 @@ USB 调参期间网页「录制」同样有效。
 > ⚠️ 不要同时插真实 USBi（同 VID/PID 会让 SigmaStudio 分不清）；接真机前请还原 `usbi_host_patch` 加速 DLL。
 > ⚠️ I2C 必须接 GPIO15/16（19/20 是原生 USB）。
 
-### 性能
-
-瓶颈是 **ESP32-S3 只有全速 USB（12Mbps）**：一次控制传输约 **4ms**（与数据量无关），
-4 字节读约 16ms、4 字节写约 8ms，而 I2C 事务本身只占 0.3~0.6ms。FX2 是高速 USB，
-同样 I2C 下自然更快——这是 USB 硬件差距，固件无法消除。
-
-已做的优化：
-
-- **固件**：USBi 写入走大块 I2C 快路径（248 字节/块），60 字节 PROGRAM 写 **13.6ms → 2.0ms**
-  （400kHz）；18.9KB 程序下载估算 ~5.0s → ~2.9s
-- **可选主机端加速**（[`usbi_host_patch/`](usbi_host_patch/)，可一键还原）：跳过状态轮询 +
-  4096 字节打包，4 字节读 **16.2→8.0ms**、4 字节写 **8.1→4.0ms**、18.9KB 下载 **~5.0s→~0.9s**
-- **I2C 时钟**：网页「地址调试」可设 600kHz / 1MHz（本项目实测 0 错误），但 ADAU1452 官方上限 400kHz
-
----
 
 ## 十二、许可
 
@@ -362,16 +347,13 @@ USB 调参期间网页「录制」同样有效。
 - SigmaStudio TCP/IP 桥接协议的解析与实现（含「应答必须留间隔」等关键时序的定位）
 - 网页控制台（单文件、零外部依赖的 HTML/CSS/JS）
 - Windows 托盘音量控制程序（C# WinForms）
-- 本文档及仓库内全部说明文字
 
 同时参考了以下开源实现与官方资料，在此一并致谢：
-
-> 特别感谢 [Kezii/rp2040-Analog-Devices-USBi](https://github.com/Kezii/rp2040-Analog-Devices-USBi)：
-> RP2040 上的 USBi 重实现，本项目 USBi 部分的行为参考。
 
 | 来源 | 用途 |
 |---|---|
 | [aventuri/sigma_tcp](https://github.com/aventuri/sigma_tcp) | TCP/IP 桥接协议蓝本 |
+| [Kezii/rp2040-Analog-Devices-USBi](https://github.com/Kezii/rp2040-Analog-Devices-USBi) | USBi |
 | Analog Devices 官方 `sigma-tcp`（`dev-extended-mode`）与 AD wiki *TCP/IP Channels* | 14 字节报文头定义 |
 | [Wei1234c/TCPi](https://github.com/Wei1234c/TCPi) | ESP32 作服务端 + 读回 |
 | [mzulus/ESP32_ADAU1452_RAM_Loader](https://github.com/mzulus/ESP32_ADAU1452_RAM_Loader) | 地址语义与 PROGRAM 写入时序 |
