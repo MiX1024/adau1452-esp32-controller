@@ -603,6 +603,58 @@
     .pills{width:100%;margin-left:0;}
     .brand h1{font-size:15px;}
   }
+
+  /* ================= v2 精简排版 ================= */
+  body{padding:14px 12px 34px;}
+  .wrap{max-width:1280px;}
+  .shell{gap:16px;}
+  .side{width:160px;padding:10px 8px;gap:4px;}
+  .side .navttl{padding:2px 8px 5px;font-size:9px;letter-spacing:1.1px;}
+  .navbtn{padding:9px 10px;font-size:13px;border-radius:10px;}
+  .navbtn .ic{font-size:14px;width:16px;}
+  .grid{gap:12px;}
+  .card{padding:13px 14px;border-radius:16px;}
+  .cardhead{margin-bottom:9px;gap:8px;}
+  .cardhead h2{font-size:11px;letter-spacing:1.1px;}
+  .hint{font-size:10.5px;}
+  details.card summary{padding:1px 0;}
+  details.card summary .stitle{font-size:13.5px;}
+  details.card[open] summary{margin-bottom:6px;}
+  .notice{margin-top:8px;padding:8px 10px;font-size:11px;line-height:1.5;border-radius:10px;}
+  .notice b{font-weight:650;}
+  .notice .btn{margin-top:7px;padding:6px 12px;font-size:11.5px;}
+  .sw{padding:9px 0;}
+  .sw .lb{font-size:12px;}
+  .sw .lb small{font-size:10px;margin-top:2px;line-height:1.35;}
+  .kv{font-size:11.5px;padding:4px 0;}
+  .field{margin-top:10px;}
+  .field label{font-size:11px;margin-bottom:5px;}
+  .field label small{font-size:10px;line-height:1.35;}
+  .field input,.field select{padding:9px 10px;font-size:13px;border-radius:10px;}
+  .section{margin:13px 0 2px;font-size:9.5px;}
+  .btn{margin-top:12px;padding:10px;font-size:13px;border-radius:11px;}
+  .btns{gap:7px;margin-top:11px;}
+  .meter+.meter{margin-top:13px;}
+  .chan{padding:11px 12px;border-radius:12px;}
+  .chan.hero{padding:13px 14px 11px;}
+  .chan.hero .cval{font-size:28px;}
+  .tones{gap:8px;}
+  .tones .chan{padding:9px 10px 8px;}
+  .bindhint{font-size:10px;opacity:.55;margin-top:8px;line-height:1.4;}
+  .mscale{font-size:9px;}
+  .gpstep{font-size:10.5px;line-height:1.5;}
+  .dsprow{gap:7px;}
+  .slotrow{padding:8px 10px;}
+  .drop{padding:13px;}
+  .otarow{gap:10px;}
+  @media (max-width:960px){
+    body{padding:10px 10px 26px;}
+    .side{width:100%;}
+  }
+
+  /* 参数表默认收起（点「参数表」展开），首页只保留曲线与滤波器列表 */
+  #eqCard:not(.showtab) .eqtabwrap{display:none !important;}
+  #eqCard:not(.showtab) .eqinfo{display:none;}
 </style>
 </head>
 <body>
@@ -683,14 +735,10 @@
   <div class="shell">
     <nav class="side">
       <div class="navttl">导航</div>
-      <button class="navbtn on" data-page="main"><span class="ic">◉</span>首页<span class="tag">电平·EQ</span></button>
-      <button class="navbtn" data-page="graph"><span class="ic">◈</span>连线图<span class="tag">DSP 信号流</span></button>
-      <button class="navbtn" data-page="tools"><span class="ic">⚙</span>工具<span class="tag">调试</span></button>
-      <div class="navfoot">
-        首页：电平、音量、EQ，都带「⚙ 设置」用来选对应的 DSP 模块。<br>
-        「连线图」导入 SigmaStudio 导出的工程文件，把 DSP 程序画成信号流并直接调参。<br>
-        SigmaStudio 桥接、DSP 程序映像、地址与 I2C 诊断、固件升级、设备日志都在「工具」页。
-      </div>
+      <button class="navbtn on" data-page="main"><span class="ic">◉</span>首页</button>
+      <button class="navbtn" data-page="graph"><span class="ic">◈</span>连线图</button>
+      <button class="navbtn" data-page="tools"><span class="ic">⚙</span>工具</button>
+
     </nav>
 
     <div class="main">
@@ -698,19 +746,14 @@
     <section class="card span6" data-page="main">
       <div class="cardhead"><h2>电平表</h2>
         <button class="btn ghost gear" id="lvBind">⚙ 设置</button>
-        <span class="hint" id="lvHint">峰值保持 · 实时</span></div>
+        <span class="hint" id="lvHint">实时</span></div>
       <div class="notice warn" id="lvWarnBridge" hidden>
-        <b>电平与音量已交由 SigmaStudio 管理。</b><br>
-        「启用桥接服务」开启期间，ESP32 把 DSP 交给 SigmaStudio，
-        本地电平读取与音量调节停止，屏幕切到调试页。
-        <button class="btn sm" id="lvGoTools">去关闭桥接服务</button>
+        <b>SigmaStudio 占用中</b>，本地控制已暂停。
+        <button class="btn sm" id="lvGoTools">关闭</button>
       </div>
       <div class="notice warn" id="lvWarnLocal" hidden>
-        <b>电平不可用：本地控制已关闭。</b><br>
-        关闭本地控制后 ESP32 不再访问 DSP，所以读不到电平。
-        若当前 DSP 程序与本控制器的地址不匹配（比如刚从 SigmaStudio 重新下载过），
-        开启后电平可能不准——但那也比没数据好看。
-        <button class="btn sm" id="lvEnableLocal">开启本地控制</button>
+        <b>本地控制已关闭</b>，电平不可用。
+        <button class="btn sm" id="lvEnableLocal">开启</button>
       </div>
       <div class="meter">
         <div class="mhead"><span class="mtag">L</span><span class="mname">左声道</span><span class="mval" id="lVal">—</span></div>
@@ -736,11 +779,9 @@
     <section class="card span6" data-page="main">
       <div class="cardhead"><h2>音量控制</h2>
         <button class="btn ghost gear" id="volBind">⚙ 设置</button>
-        <span class="hint" id="volHint">实时同步 DSP</span></div>
+        <span class="hint" id="volHint">实时</span></div>
       <div class="notice warn" id="volWarn" hidden>
-        <b>音量已暂停。</b>桥接服务开启时 DSP 由 SigmaStudio 管理，
-        本地写入被拒绝（以免改到 SigmaStudio 正在调试的程序）。
-        关闭桥接服务后即可恢复调节。
+        <b>SigmaStudio 占用中</b>，本地音量已暂停。
       </div>
       <div id="channels"></div>
       <div class="bindhint" id="volBindInfo"></div>
@@ -752,8 +793,9 @@
       <div class="cardhead">
         <h2>均衡器 EQ</h2>
         <button class="btn ghost sm" id="eqAllBtn">全选</button>
-        <button class="btn ghost sm" id="eqReadBtn">读取当前值</button>
-        <span class="hint" id="eqHint">需先在「连线图」导入工程文件</span>
+        <button class="btn ghost sm" id="eqReadBtn">读取</button>
+        <button class="btn ghost sm" id="eqTabBtn">参数表</button>
+        <span class="hint" id="eqHint">等待工程数据</span>
       </div>
       <div class="eqfilters" id="eqFilters"></div>
       <svg class="gpcurve eqgrp" id="eqChart"></svg>
@@ -783,11 +825,7 @@
     <section class="card span12" data-page="graph">
       <div class="cardhead"><h2>连线图数据</h2><span class="hint" id="gpSum">设备上暂无数据</span></div>
       <div class="notice">
-        在 SigmaStudio 里执行 <b>Action → Export system files</b>，把导出的
-        <b>*_NetList.xml</b> 和 <b>*.params</b> 一起选进来（两个文件在同目录，一次全选即可），
-        网页会自动解析并画出信号流。<br>
-        数据存在<b>设备 flash</b> 里，换电脑或手机打开都不用重新导入；
-        改过 DSP 程序后只要再导入一次，<b>地址变了也不需要改固件</b>。
+        导入 SigmaStudio 导出的 <b>NetList.xml</b> + <b>params</b>，数据存在设备里。
       </div>
       <div class="otarow">
         <div class="drop" id="gpDrop">
@@ -813,14 +851,12 @@
           <input type="checkbox" id="gpAuto" class="tgin" checked><span class="tg"></span>
           <span>自动排列</span>
         </label>
-        <span class="hint" id="gpLegend">亮绿=有 EQ 可调 · 绿框=可调 · 橙框=只读</span>
+        <span class="hint" id="gpLegend">绿=可调 · 橙=只读</span>
         <button class="btn ghost" id="gpFull">⛶ 全屏</button>
       </div>
       <div class="gpwrap" id="gpWrap"><svg id="gpSvg"></svg></div>
       <div class="gpstep" id="gpTip">
-        滚轮缩放 · 按住拖动平移 · 点方块看参数。信号链较长，默认按 <b>1:1</b>
-        从信号入口开始显示，想纵览全貌点 <b>适配</b>。<br>
-        图是只读的：增删方块 / 改连线请回 SigmaStudio 做。
+        滚轮缩放 · 拖动平移 · 点方块调参（图只读，改程序请回 SigmaStudio）
       </div>
     </section>
 
@@ -830,32 +866,30 @@
         <select id="gpPick"></select>
         <span class="hint" id="gpSelMeta">未选中</span>
       </div>
-      <div id="gpPanel"><div class="gpempty">在左边点一个方块，这里会列出它的参数。</div></div>
+      <div id="gpPanel"><div class="gpempty">点左侧方块查看参数</div></div>
     </section>
 
     <details class="card span6" id="bridgeCard" data-page="tools">
       <summary><span class="stitle">SigmaStudio 桥接</span><span class="hint" id="brSummary">未启用</span></summary>
       <div class="notice">
-        在 SigmaStudio 的 <b>Hardware Configuration</b> 里拖入 <b>TCP/IP</b> 通信通道，右键选
-        <b>Show TCPIP form</b>，填本机 IP 与下面端口后 Open connection —— 之后就能像接 USBi 一样在线调参、
-        执行 <b>Link Compile Download</b>。
+        SigmaStudio → Hardware Configuration → <b>TCP/IP</b> → Show TCPIP form，填本机 IP + 端口。
       </div>
 
       <label class="sw" for="brEnable">
-        <span class="lb">启用桥接服务<small>ESP32 监听 TCP 端口，等待 SigmaStudio 连接</small></span>
+        <span class="lb">启用桥接服务</span>
         <input type="checkbox" id="brEnable" class="tgin"><span class="tg"></span>
       </label>
       <label class="sw" for="brVerbose">
-        <span class="lb">逐报文日志<small>把 SigmaStudio 每一条读/写报文（地址、长度）记到网页日志里，用于排查它到底访问了哪些地址。默认关闭：高频轮询时会产生大量日志</small></span>
+        <span class="lb">逐报文日志<small>每条读/写记入设备日志</small></span>
         <input type="checkbox" id="brVerbose" class="tgin"><span class="tg"></span>
       </label>
       <label class="sw" for="brLocal">
-        <span class="lb">本地控制<small>允许编码器 / 网页音量控制 DSP。SigmaStudio 重编过程序后本地地址会失配，建议关闭</small></span>
+        <span class="lb">本地控制<small>允许本地改 DSP，建议关闭</small></span>
         <input type="checkbox" id="brLocal" class="tgin"><span class="tg"></span>
       </label>
 
       <div class="field">
-        <label>监听端口（默认 8086）</label>
+        <label>端口</label>
         <div class="frow">
           <input type="number" id="brPort" min="1024" max="65535" step="1" inputmode="numeric">
           <button class="btn ghost" id="brPortApply">应用</button>
@@ -863,10 +897,8 @@
       </div>
 
       <div class="field">
-        <label>读应答间隔（微秒）
-          <small>⚠ 关键参数：SigmaStudio 一次 recv 只取一条应答，多条紧挨着发会被它
-          一次性读走导致崩溃。实测 15000 还不够、<b>30000（30ms）才稳定</b>。
-          调大→更稳但刷新变慢；0 = 关闭</small>
+        <label>应答间隔 (µs)
+          <small>SigmaStudio 一次只读一条应答，默认 30000；0 = 关闭</small>
         </label>
         <div class="frow">
           <input type="number" id="brGap" min="0" max="200000" step="1000" inputmode="numeric">
@@ -885,33 +917,46 @@
       <div class="kv"><span class="k">重同步字节</span><span class="v" id="brSync">—</span></div>
     </details>
 
+    <details class="card span6" id="usbiCard" data-page="tools">
+      <summary><span class="stitle">USBi（USB 直连 SigmaStudio）</span><span class="hint" id="usbSummary">未启用</span></summary>
+      <div class="notice">
+        原生 USB 口枚举为 <b>USBi</b>（0x0456:0x7031），SigmaStudio 直接选 USBi。
+        与 TCP 桥接互斥；I2C = GPIO15/16。
+      </div>
+
+      <label class="sw" for="usbEnable">
+        <span class="lb">启用 USBi<small>电脑识别为 USBi；掉电保存</small></span>
+        <input type="checkbox" id="usbEnable" class="tgin"><span class="tg"></span>
+      </label>
+
+      <div class="kv"><span class="k">USB 状态</span><span class="v" id="usbState">—</span></div>
+      <div class="kv"><span class="k">SigmaStudio 驱动</span><span class="v" id="usbDriver">—</span></div>
+      <div class="kv"><span class="k">通信模式</span><span class="v" id="usbMode">—</span></div>
+      <div class="kv"><span class="k">转发的报文</span><span class="v" id="usbStat">—</span></div>
+      <div class="kv"><span class="k">最近访问</span><span class="v" id="usbLast">—</span></div>
+      <div class="kv"><span class="k">处理耗时</span><span class="v" id="usbLat">—</span></div>
+      <div class="kv"><span class="k">出错次数</span><span class="v" id="usbErr">—</span></div>
+      <div class="kv"><span class="k">USB 枚举次数</span><span class="v" id="usbAttach">—</span></div>
+    </details>
+
     <details class="card span6" id="imgCard" data-page="tools">
       <summary><span class="stitle">DSP 程序映像</span><span class="hint" id="imgSummary">无</span></summary>
       <div class="notice">
-        先点「开始录制」，再到 SigmaStudio 里执行 <b>Link Compile Download</b>，
-        然后点「保存到 Flash」。flash 里有 <b>4 个槽位</b>，每份固件占一个，
-        可以分别起名、单独加载 —— <b>换程序不用重新编译固件，也不需要自举 EEPROM</b>。<br>
-        开了「上电自动加载」后，1452 每次上线都会自动推送；
-        SigmaStudio 调试完之后不会重复推送（不覆盖它刚下的程序）。
+        录制 SigmaStudio 下载 → 保存到 Flash（4 槽位）→ 可设上电自动推送。
       </div>
 
       <label class="sw" for="imgAuto">
-        <span class="lb">上电自动加载 DSP 程序<small>开启后会<b>一直监控 1452</b>：它每次上线（含断电重启后）都会自动把下面选中的固件推过去。会先等它就绪再推，推送后还会回读校验，程序被覆盖会自动重推。<br>
-        <b style="color:#ffcf9b">默认关闭</b>。若 1452 已改用 <b>selfboot</b>（自己从 EEPROM 启动），请保持关闭 —— 两者会互相覆盖。</small></span>
+        <span class="lb">上电自动加载<small>1452 上线自动推送；selfboot 时保持关闭</small></span>
         <input type="checkbox" id="imgAuto" class="tgin"><span class="tg"></span>
       </label>
 
       <div class="field">
-        <label>开机推送到 1452<small>选择哪一份固件在上电时推送给 DSP</small></label>
+        <label>开机推送槽位</label>
         <select id="imgBoot"></select>
       </div>
 
       <div class="field">
-        <label>就绪等待（毫秒）
-          <small>探测到 1452 上线后等多久才开始推送。selfboot 关闭时不需要久等，
-          <b>默认 500ms</b>；觉得慢可以调小（0 = 一发现就推）。若推送失败会自动递增重试。
-          </small>
-        </label>
+        <label>就绪等待 (ms)<small>探测上线后等待时间，默认 500</small></label>
         <div class="frow">
           <input type="number" id="imgSettle" min="0" max="5000" step="100" inputmode="numeric">
           <button class="btn ghost" id="imgSettleApply">应用</button>
@@ -935,21 +980,20 @@
       </div>
     </details>
 
-    <details class="card span12" id="dbgCard" data-page="tools">
+    <details class="card span6" id="dbgCard" data-page="tools">
       <summary><span class="stitle">地址调试</span><span class="hint">不依赖 SigmaStudio</span></summary>
       <div class="notice">
-        地址语义：<b>&ge; 0xF000</b> 为核心寄存器（按字节）；<b>&lt; 0xF000</b> 为 DSP 内存（按字，1 字 = 4 字节）。
-        读到 4 字节时会附带 8.24 定点解释。
+        <b>≥0xF000</b> 寄存器（字节） · <b>&lt;0xF000</b> 内存（字，4 字节）
       </div>
       <div class="dsprow">
-        <div class="field"><label>地址（支持 0x 前缀）</label>
+        <div class="field"><label>地址</label>
           <input type="text" id="dbgAddr" value="0x001D" spellcheck="false" autocomplete="off"></div>
         <div class="field" style="flex:0 0 78px"><label>长度</label>
           <input type="number" id="dbgLen" value="4" min="1" max="64" inputmode="numeric"></div>
         <button class="btn ghost" id="dbgRead">读取</button>
       </div>
       <div class="dsprow">
-        <div class="field"><label>写入值（0x 十六进制 / 纯数字为十进制）</label>
+        <div class="field"><label>写入值</label>
           <input type="text" id="dbgVal" placeholder="0x00804DCE" spellcheck="false" autocomplete="off"></div>
         <button class="btn ghost" id="dbgWrite">写入</button>
       </div>
@@ -958,15 +1002,12 @@
         <button class="btn danger" id="dbgReset">软复位 DSP</button>
       </div>
 
-      <div class="section">I2C 频率（下载提速）</div>
+      <div class="section">I2C 频率</div>
       <div class="notice">
-        PROGRAM 区写入是纯 I2C 线速限制，所以提高 SCL 能直接缩短下载时间
-        （实测 400kHz → 600kHz，下载 0.77s 降到约 0.5s，0 错误）。
-        <b>ADAU1452 官方上限是 400kHz</b>，超频属越规操作，
-        改完请重新下载并回读校验。掉电保留。
+        提高 SCL 可加快下载；ADAU1452 官方上限 400kHz（超频需自行校验）
       </div>
       <div class="dsprow">
-        <div class="field"><label>SCL 频率（Hz）</label>
+        <div class="field"><label>SCL (Hz)</label>
           <input type="number" id="i2cHz" min="10000" max="1000000" step="10000" inputmode="numeric"></div>
         <button class="btn ghost" id="i2cSetHz">应用频率</button>
       </div>
@@ -978,8 +1019,7 @@
         <button class="btn ghost sm" id="i2cRefresh">刷新</button>
       </div>
       <label class="sw" for="i2cPullup">
-        <span class="lb">内部弱上拉<small>ESP32 内部上拉约 45kΩ，对 400kHz 偏弱；
-        板上有外部上拉时不需要它</small></span>
+        <span class="lb">内部弱上拉<small>约 45kΩ；有外部上拉可关</small></span>
         <input type="checkbox" id="i2cPullup" class="tgin"><span class="tg"></span>
       </label>
       <div class="mono" id="i2cOut">—</div>
@@ -990,7 +1030,7 @@
       <div class="otarow">
         <div class="drop" id="drop">
           <div class="ico">⬆</div>
-          <div class="txt" id="dropText">点击或拖入 .bin 固件<small>上传完成后设备自动重启</small></div>
+          <div class="txt" id="dropText">拖入 .bin 固件<small>上传后自动重启</small></div>
         </div>
         <button class="btn" id="otaBtn">上传并升级</button>
       </div>
@@ -1014,7 +1054,7 @@
         </div>
         <span class="hint" id="logInfo">未开启</span>
       </div>
-      <div class="logbox" id="logBox"><span class="logempty">勾选「显示日志」后，设备的运行日志会实时推送到这里。</span></div>
+      <div class="logbox" id="logBox"><span class="logempty">勾选「显示日志」查看实时日志</span></div>
     </section>
       </div>
     </div>
@@ -1026,9 +1066,7 @@
   <div class="mbox">
     <h3 id="bindTitle">控件绑定</h3>
     <div class="msub" id="bindSub">
-      把首页的每个控件对到「连线图」里解析出来的具体参数上。<br>
-      绑定按<b>名字</b>保存，所以以后换了 DSP 程序、重新导入工程文件后会自动重新对应到新地址，
-      <b>不需要改固件</b>。
+      控件按<b>名字</b>绑定，换程序后重新导入工程文件即可自动对应。
     </div>
     <div id="bindRows"></div>
     <div class="btns">
@@ -1270,6 +1308,8 @@ const chanBox = $('channels');
 
 let ws = null, retry = 0, retryTimer = null, chMeta = null;
 let bridgeOn = false;                /* 桥接服务是否开启（由 applyState 更新） */
+let usbOn = false;                   /* USBi(USB) 是否开启（由 applyState 更新） */
+let usbPending = 0;                  /* USBi 开关刚提交时的防回跳计时 */
 let safeMode = false;                /* 安全模式（由 applyState 更新） */
 const dragging = {}, holdTimer = {};
 const lv = { l: { d: -96, f: 0, p: 0 }, r: { d: -96, f: 0, p: 0 } };
@@ -1368,7 +1408,9 @@ function updateChannels(ch, sel) {
 /* ---------- 服务器状态 ---------- */
 function applyState(s) {
   const br = s.bridge || {};
+  const usb = s.usbi || {};
   applyBridge(br);
+  applyUsbi(usb);
   applyImage(s.dspimg);
   applyWifiLink(s.wifi);
   if (s.graph) gpApplyDevice(s.graph);
@@ -1384,14 +1426,17 @@ function applyState(s) {
    * 两种情况都必须明确告知原因，否则看起来像坏了。
    */
   const brOn = !!br.enabled;
-  bridgeOn = brOn;                     /* 供 sendSet() 判断是否该发音量命令 */
-  const localOff = !brOn && (br.local_control === false);
+  const usbOnNow = !!usb.enabled;
+  usbOn = usbOnNow;
+  const sigOn = brOn || usbOnNow;
+  bridgeOn = sigOn;                    /* 供 sendSet() 判断是否该发音量命令 */
+  const localOff = !sigOn && (br.local_control === false);
 
-  $('lvWarnBridge').hidden = !brOn;
+  $('lvWarnBridge').hidden = !sigOn;
   $('lvWarnLocal').hidden  = !localOff;
-  $('lvHint').textContent = brOn ? '不可用 · 桥接服务已开启'
-                                 : (localOff ? '不可用 · 本地控制已关闭'
-                                             : '峰值保持 · 实时');
+  $('lvHint').textContent = sigOn
+    ? (usbOnNow ? 'USBi 占用中' : '桥接占用中')
+    : (localOff ? '本地控制关闭' : '实时');
 
   /* 安全模式：开启后上电不写 DSP，本地音量调节也禁止（防写旧地址爆音） */
   safeMode = !!s.safe;
@@ -1399,23 +1444,26 @@ function applyState(s) {
   $('safePill').classList.toggle('on', safeMode);
   $('safeText').textContent = safeMode ? '安全模式·开' : '安全模式';
 
-  /* 音量卡：桥接 / 安全模式期间禁止调节，并直接禁用滑块 */
-  const volLocked = brOn || safeMode;
-  $('volWarn').hidden = !brOn;
-  $('volHint').textContent = brOn ? '已暂停 · 桥接服务开启'
-                           : safeMode ? '已暂停 · 安全模式（上电不写 DSP）'
-                                      : '实时同步 DSP';
+  /* 音量卡：桥接/USBi / 安全模式期间禁止调节，并直接禁用滑块 */
+  const volLocked = sigOn || safeMode;
+  $('volWarn').hidden = !sigOn;
+  $('volHint').textContent = sigOn ? '已暂停'
+    : (safeMode ? '安全模式' : '实时');
   chanBox.querySelectorAll('input[type=range]').forEach(el => { el.disabled = volLocked; });
 
   const on = !!s.dsp;
   /*
    * 顶部状态胶囊。判定顺序必须与设备端一致：
-   *   桥接服务开启 → SigmaStudio 托管（无论有没有客户端）
+   *   USBi(USB) 开启 / 桥接服务开启 → SigmaStudio 托管
    *   本地控制关闭 → 本地控制已关闭（橙色，与"调试中"的青色区分开）
    */
-  if (brOn) {
+  if (sigOn) {
     dspPill.className = 'pill bridge';
-    dspText.textContent = br.client ? 'SigmaStudio 调试中' : '桥接服务已开启';
+    if (usbOnNow) {
+      dspText.textContent = usb.configured ? 'USBi 调试中' : 'USBi 已开启';
+    } else {
+      dspText.textContent = br.client ? 'SigmaStudio 调试中' : '桥接服务已开启';
+    }
   } else if (br.local_control === false) {
     dspPill.className = 'pill warn';
     dspText.textContent = '本地控制已关闭';
@@ -1627,8 +1675,7 @@ function applyBridge(b, force) {
     ? ((b.last_is_read ? '读 ' : '写 ') + hex4(b.last_addr) + ' · ' + b.last_len + ' 字节')
     : '—';
   if (b.lat_avg || b.lat_last) {
-    $('brLat').textContent = '均 ' + fmtUs(b.lat_avg) + ' · 最大 ' + fmtUs(b.lat_max) +
-                             '（I2C 最大 ' + fmtUs(b.i2c_max) + '）';
+    $('brLat').textContent = '均 ' + fmtUs(b.lat_avg) + ' · 最大 ' + fmtUs(b.lat_max);
     $('brJit').textContent = b.jitter10 > 0
       ? (b.jitter10 + ' 次 / 共 ' + b.pkt_read + ' 次读')
       : ('0 次 / 共 ' + b.pkt_read + ' 次读');
@@ -1641,6 +1688,70 @@ function applyBridge(b, force) {
   $('brSummary').textContent = b.client ? ('已连接 ' + (b.ip || ''))
                              : (b.running ? ('监听 ' + b.port) : '未启用');
 }
+
+/* ---------- USBi（USB 直连 SigmaStudio） ---------- */
+function applyUsbi(u, force) {
+  if (!u) u = {};
+  if (force || Date.now() > usbPending) {
+    $('usbEnable').checked = !!u.enabled;
+  }
+
+  let state, cls = 'v';
+  if (!u.installed) {
+    state = '未安装（开关关闭）';
+  } else if (!u.mounted) {
+    state = '已安装 · 等待 USB 连接';
+    cls = 'v warn';
+  } else if (!u.configured) {
+    state = 'USB 已连接 · 等待 Windows 驱动';
+    cls = 'v warn';
+  } else {
+    state = 'USB 已连接 · 驱动已接管';
+  }
+  $('usbState').textContent = state;
+  $('usbState').className = cls;
+
+  $('usbDriver').textContent = u.configured
+    ? 'CYUSB 已加载（SigmaStudio 可用）'
+    : (u.mounted ? '等待 CYUSB 驱动加载' : '—');
+
+  const traffic = (u.pkt_write || 0) + (u.pkt_read || 0);
+  $('usbMode').textContent = u.last_format === 1
+    ? 'SPI（应为 I2C）'
+    : ((u.last_format === 0 && traffic) ? 'I2C' : '—');
+
+  $('usbStat').textContent = '写 ' + (u.pkt_write || 0) + ' · 读 ' + (u.pkt_read || 0) +
+                             ' · 其它 ' + (u.cmd_other || 0);
+  $('usbLast').textContent = traffic
+    ? ((u.last_is_read ? '读 ' : '写 ') + hex4(u.last_addr || 0) + ' · ' +
+       (u.last_len || 0) + ' 字节')
+    : '—';
+  $('usbLat').textContent = u.last_us
+    ? ('最近 ' + fmtUs(u.last_us) + ' · 最大 ' + fmtUs(u.max_us)) : '—';
+  $('usbErr').textContent = (u.errors || 0) + ' 次';
+  $('usbErr').className = 'v' + ((u.errors || 0) > 0 ? ' bad' : '');
+  $('usbAttach').textContent = (u.attach_count || 0) + ' 次';
+
+  $('usbSummary').textContent = !u.enabled ? '未启用'
+    : (u.configured ? 'USBi 已就绪' : (u.mounted ? '等待驱动' : '等待 USB'));
+}
+
+async function saveUsbi() {
+  usbPending = Date.now() + 2500;
+  const on = $('usbEnable').checked;
+  try {
+    const j = await postJSON('/api/usbi', { enabled: on });
+    applyUsbi(j, true);
+    toast(on
+      ? 'USBi 已开启：用 USB-C 数据线把电脑接到板子上标 USB 的口'
+      : 'USBi 已关闭：设备从电脑上移除，本地控制恢复', 'ok', 5000);
+    applyState(await (await fetch('/api/state')).json());
+  } catch (e) {
+    toast('设置失败：' + e.message, 'err', 0);
+    $('usbEnable').checked = !on;
+  }
+}
+$('usbEnable').addEventListener('change', saveUsbi);
 
 async function saveBridge() {
   brPending = Date.now() + 1500;
@@ -1986,11 +2097,11 @@ $('i2cPullup').addEventListener('change', async () => {
   } catch (e) { toast('设置失败：' + e.message, 'err', 0); }
 });
 
-/* 电平卡上的「去关闭桥接服务」：直接跳到工具页并展开桥接卡片 */
+/* 电平卡上的「去关闭」：跳到工具页并展开对应的卡片（USBi 或 TCP 桥接） */
 $('lvGoTools').addEventListener('click', () => {
   setPage('tools');
-  const card = $('bridgeCard');
-  if (card) card.open = true;          /* 直接展开桥接卡片，少一步操作 */
+  const card = usbOn ? $('usbiCard') : $('bridgeCard');
+  if (card) card.open = true;          /* 直接展开对应卡片，少一步操作 */
   setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
 });
 
@@ -2618,7 +2729,7 @@ function gpPanel() {
   if (i < 0) {
     $('gpSelName').textContent = '模块参数';
     $('gpSelMeta').textContent = '未选中';
-    box.innerHTML = '<div class="gpempty">在左边点一个方块，这里会列出它的参数。</div>';
+    box.innerHTML = '<div class="gpempty">点左侧方块查看参数</div>';
     return;
   }
   const n = GP.nodes[i];
@@ -3970,8 +4081,8 @@ function eqRenderFilters() {
     });
   });
   $('eqHint').textContent = nodes.length
-    ? (nodes.length + ' 个滤波器 · 勾选叠加显示 · 拖动频点调频率/增益（松手写入并保存）')
-    : '未找到滤波器模块（请先在「连线图」导入工程文件）';
+    ? (nodes.length + ' 个滤波器')
+    : '等待工程数据';
 }
 
 function eqRenderCard() {
@@ -3983,9 +4094,7 @@ function eqRenderCard() {
   if (!flat.length) {
     chart.innerHTML = '';
     $('eqLegend').textContent = '—';
-    $('eqInfo').textContent = GP.params.length
-      ? '勾选上方的滤波器以叠加显示频谱'
-      : '请先在「连线图」页导入 SigmaStudio 导出的工程文件';
+    $('eqInfo').textContent = GP.params.length ? '勾选上方滤波器' : '等待工程数据';
     $('eqBands').innerHTML = '';
     if (wrap) wrap.hidden = true;
     return;
@@ -4011,8 +4120,7 @@ function eqRedraw() {
   $('eqLegend').innerHTML = filters.map(f =>
     '<span><i style="background:' + f.color + '"></i>' + gpX(f.n.cell || f.n.name)
     + ' · ' + f.bands.length + '段</span>').join('');
-  $('eqInfo').textContent = filters.length + ' 个滤波器叠加 · 纵轴 ' + r.lo.toFixed(0)
-    + '~' + r.hi.toFixed(0) + ' dB · 拖动频点调频率/增益';
+  $('eqInfo').textContent = filters.length + ' 个滤波器 · 拖动频点调参';
   /* 各段行头同步刷新（不重建输入框，否则正在输入的值会被冲掉） */
   const flat = eqFlatBands();
   Array.from($('eqBands').querySelectorAll('.eqband')).forEach((box, i) => {
@@ -4461,6 +4569,13 @@ function ESPLOGS(i, from, to, key) {
   });
   const rl = $('eqReadBtn');
   if (rl) rl.addEventListener('click', eqReadLive);
+  /* 参数表默认收起，降低页面信息密度；点按钮展开 */
+  const tb = $('eqTabBtn');
+  if (tb) tb.addEventListener('click', () => {
+    const c = $('eqCard');
+    c.classList.toggle('showtab');
+    tb.textContent = c.classList.contains('showtab') ? '收起' : '参数表';
+  });
   eqBindDrag();
   /* 启动就拉一次完整绑定（含 key），这样卡片下方能显示"绑到了哪个模块" */
   bindFetch();
