@@ -49,12 +49,12 @@
 **首页** —— 左右声道电平表、四路音量（MASTER / LOW / HIGH / MID）、9 段 EQ 曲线
 （参数表点「参数表」展开），改动直接写入 DSP：
 
-![网页控制台首页](photo/web-home.jpg)
+![网页控制台首页](photo/web-home-v2.jpg)
 
 **连线图** —— 导入 SigmaStudio 导出的 `*.NetList.xml` + `*.params` 后自动解析成信号流图，
 可点开方块在线调参（亮绿 = 有 EQ 可调 · 绿框 = 可调 · 橙框 = 只读）：
 
-![连线图页面](photo/web-graph.jpg)
+![连线图页面](photo/web-graph-v2.jpg)
 
 信号流全貌（39 个模块 / 52 条连线 / 2 个电平）：
 
@@ -63,7 +63,7 @@
 **工具** —— SigmaStudio 桥接 / USBi、DSP 程序映像（录制 / 4 槽位固件库 / 上电自动加载）、
 地址调试（含 I2C 频率）、固件 OTA 升级、设备日志：
 
-![工具页面](photo/web-tools.jpg)
+![工具页面](photo/web-tools-v2.jpg)
 
 > 界面为深色极简风格：辅助说明压缩成一行提示，高级参数默认折叠，首页只保留电平/音量/EQ 三个核心区块。
 
@@ -271,52 +271,13 @@ L/R 电平表 + 4 路滑块 + WiFi 信息。编译：`powershell -ExecutionPolic
 
 ## 九、关键实现约束（改动前必读）
 
-这些都是实测踩过的坑，**改之前先看这一节**：
-
-- ⚠️⚠️ **桥接应答之间必须留间隔**（默认 `30ms`，配置项 `resp_gap_us`）。
-  SigmaStudio 会把多条请求合并进一个 TCP 段，若我们的多条应答在它处理一条的周期内连发，
-  它一次 `recv` 全收走 → 解析错位 → **直接崩溃**。实测 2ms/5ms 会崩，15ms 起稳定，30ms 为默认。
-  必须用 `esp_rom_delay_us()` 而非 `vTaskDelay()`（tick 是 10ms，精度太粗）。
-- ⚠️ **电平是 Q15 不是 8.24**（见第四节）。
-- ⚠️ **SPI 单次 DMA 上限 `1<<18 = 32768` 字节**，分块必须 ≤ 32KB，否则报
-  `txdata transfer > hardware max supported len`。
-- ⚠️ **ST7789 用 `0x20 INVOFF`**（误用 `0x21 INVON` 会导致黑底变白、绿色变品红），
-  且写帧缓冲前**必须 `swap16`**（ESP32 小端），否则绿色→品红、红色→蓝。
-- ⚠️ **`httpd` 的 `lru_purge_enable` 必须为 `true`**，否则连接池满时新请求无法处理
-  （表现为浏览器"连不上"，而 `curl` 正常）。
-- ⚠️ **PROGRAM 区写入必须 4 字节一次 + 约 300µs 间隔**，否则 I2C 收到 ACK 但指令没进 DSP。
-- ⚠️ **回放的寄存器顺序不能乱**：必须照官方 `default_download_IC_1()` 的次序，否则 1452 会
-  **完全不出声，但 I2C 一切正常、内存校验也通过**（PLL 一直锁着，很难查）。
-- ⚠️ **1452 的 SELFBOOT 引脚接低后**，断电重启 RAM 全空，参数读到的是未初始化垃圾值，
-  必须靠 ESP32 推送才能起来（这也是自动重推存在的意义）。
-- ⚠️ **换 DSP 程序后地址会全部失效**：网页控件绑定与 EQ 都按 `cell|parameter` 名字自动重解析地址。
-- ⚠️ 桥接开启期间，所有会写 DSP 的接口都会被拒绝（防止绕过滑块），只有读接口不受限。
-- ⚠️ WiFi 默认值存在 `main/wifi_secrets.h`（不入库）；`net.c` 用 `__has_include` 读取，
-  文件不存在时回退到内置通用值。
-- ⚠️ **USB 与串口不能同时用同一个口**：ESP32-S3 的 USB-Serial-JTAG 和 USB-OTG 共用
-  GPIO19/20 与 USB PHY，`sdkconfig.defaults` 已关闭 USJ（`CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=n`）。
-  所以板子标 `USB` 的口只做 USBi，不再提供 USB 串口/下载；烧录与日志继续走 `UART` 口（COM8）。
-- ✅ **不开 USBi 时 USB 口在电脑上完全不可见**：ESP32-S3 的 USB-Serial-JTAG 复位默认带 D+ 上拉，
-  而 CPU 软复位（`idf.py flash` / RTS 复位）时 IDF 会保留 USJ 不关，电脑就会报
-  “未知 USB 设备（设备描述符请求失败）”。`usbi_init()` 启动时会显式关掉 USJ 的
-  PHY 焊盘和 D+/D- 上拉（顺带关时钟），所以不启用 USBi 时插 USB 线不会有任何设备出现；
-  打开 USBi 后 TinyUSB 再接管共用 PHY。
-- ⚠️ **GPIO19/20 只能给 USB**：I2C 必须留在 GPIO15/16。把 I2C 接回 19/20 会直接干扰 USB
-  数据线（上下拉/跳变），表现为设备枚举失败或时好时坏。
-- ⚠️ **USBi 与 TCP 桥接互斥**：都独占 DSP。网页开一个会自动关另一个；NVS 里若两个都开着，
-  启动时以 USBi 为准（`main.c` 里有兜底）。
-- ⚠️ **USBi 模式必须让位**：开启期间本地编码器/网页音量/电平、以及「上电自动推 DSP 程序」
-  全部暂停（与 TCP 桥接同一套语义），否则会把 SigmaStudio 正在下载的程序写坏。
-- ⚠️ **USBi 依赖 SigmaStudio 装的 CYUSB 驱动**（`D:\APPS\SigmaStudio 4.7\USB drivers\x64\CyUSB.inf`，
-  驱动版本 3.4.2.147）。设备管理器里应显示 "Analog Devices USBi (programmed)"；
-  同一时间不要把真实 USBi 仿真器也插上（同 VID/PID 会让 SigmaStudio 分不清）。
-- ⚠️ **TinyUSB 是组件管理器依赖**：`main/idf_component.yml` 声明 `espressif/esp_tinyusb`，
-  首次 build 会下载到 `managed_components/`（已 gitignore）。国内网络下载失败时可设
-  `$env:IDF_COMPONENT_REGISTRY_URL="https://components.espressif.cn"` 再 build。
-- ⚠️ **USBi 控制传输超时是 1 秒**（ADIUSBi.dll 里 `ControlEndPt.TimeOut=1000`），
-  所以每次 `0xB2` 写入的 I2C 处理必须够快：固件对 USBi 写入走大块快路径
-  （PROGRAM 区每 248 字节一次 + 300µs settle），4KB 程序块在 400kHz 下约 100ms，
-  即使主机端用 4096 字节打包也远低于超时。
+- ⚠️ **桥接应答间隔**（`resp_gap_us`，默认 30ms）：SigmaStudio 会把多条请求合并，应答连发会被它一次读走导致解析错位甚至崩溃；必须用 `esp_rom_delay_us()`（`vTaskDelay` 的 10ms tick 精度不够）。
+- ⚠️ **电平是 Q15，不是 8.24**（见第四节）。
+- ⚠️ **PROGRAM 区写入时序**：冷启动回放按 4 字节 + 约 300µs；USBi 下载走大块快路径（见第十一节）。
+- ⚠️ **ST7789** 用 `0x20 INVOFF`，写帧缓冲前必须 `swap16`。
+- ⚠️ **换 DSP 程序后地址会全部失效**：绑定与 EQ 按 `cell|parameter` 名字自动重解析；桥接 / USBi 开启时本地写 DSP 一律被拒并让位。
+- ⚠️ **USB 口只做 USBi**：I2C 必须留在 GPIO15/16；不开 USBi 时 USB 口在电脑上不可见，属正常现象。
+- 其余细节（SPI DMA 上限、httpd 连接池、1452 寄存器顺序、SELFBOOT、CyUSB 驱动等）见源码注释与第十一节。
 
 ---
 
