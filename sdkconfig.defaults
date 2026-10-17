@@ -11,3 +11,15 @@ CONFIG_HTTPD_WS_SUPPORT=y
 
 # 主任务栈（WiFi 初始化需要更多栈）
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# ============================================================
+#  USB：ESP32-S3 原生 USB（GPIO19/20，板子上标 "USB" 的 Type-C）
+#  用作 USBi（USB-OTG 设备，VID 0x0456 / PID 0x7031）
+#
+#  ⚠️ USB-Serial-JTAG 和 USB-OTG 共用同一组引脚与 USB PHY，
+#     必须关掉 USJ，否则 OTG 无法接管该端口。
+#     串口日志/烧录仍走 UART0（右侧 UART 口 → COM8），不受影响。
+# ============================================================
+CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=n
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=n

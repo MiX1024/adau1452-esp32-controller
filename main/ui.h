@@ -53,6 +53,12 @@ typedef struct {
     char     local_ip[16];    /* 本机 STA IP（未连接时为空） */
     int16_t  rssi;            /* dBm（0 = 无） */
     uint8_t  channel;         /* WiFi 信道（0 = 无） */
+
+    /* --- USBi(USB) 模式专用 --- */
+    bool     is_usb;          /* true = USB(USBi) 调试页，false = TCP 桥接 */
+    bool     usb_mounted;     /* USB 已连接（主机已复位总线） */
+    bool     usb_configured;  /* 主机已配置（Windows CYUSB 驱动已接管） */
+    uint8_t  usb_format;      /* SigmaStudio 选的通信模式：0=I2C，1=SPI */
 } ui_bridge_info_t;
 
 /* 初始化 UI（重置内部电平平滑 / 峰值保持 / 刷新快照状态） */

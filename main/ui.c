@@ -100,7 +100,7 @@ static const char *dsp_state_name(int st)
 {
     switch (st) {
     case UI_DSP_ONLINE:    return "ONLINE";
-    case UI_DSP_BRIDGE:    return "BRIDGE(调试页)";
+    case UI_DSP_BRIDGE:    return "DEBUG(调试页)";
     case UI_DSP_LOCAL_OFF: return "LOCAL_OFF(本地控制关)";
     default:               return "OFFLINE";
     }
@@ -602,18 +602,37 @@ static void build_bridge_rows(const ui_bridge_info_t *br, br_row_t *rows)
 
     const bool has_traffic = (br->pkt_write + br->pkt_read) > 0;
 
-    /* PC：客户端地址与端口（没连时给出明确提示，而不是空白） */
-    if (br->client_ip[0] != '\0') {
-        seg_addf(&rows[0], COLOR_GREEN, "%s", br->client_ip);
-        seg_addf(&rows[0], COLOR_GRAY, ":%u", (unsigned)br->port);
-    } else {
-        seg_addf(&rows[0], COLOR_ORANGE, "WAITING");
-        seg_addf(&rows[0], COLOR_GRAY, " :%u", (unsigned)br->port);
-    }
+    if (br->is_usb) {
+        /* PC：USB 枚举/驱动状态（Windows 装上 CYUSB 驱动才算 CONFIGURED） */
+        if (br->usb_configured) {
+            seg_addf(&rows[0], COLOR_GREEN, "USBI");
+            seg_addf(&rows[0], COLOR_GRAY, "  DRIVER OK");
+        } else if (br->usb_mounted) {
+            seg_addf(&rows[0], COLOR_YELLOW, "USB");
+            seg_addf(&rows[0], COLOR_GRAY, "  ENUMERATING");
+        } else {
+            seg_addf(&rows[0], COLOR_ORANGE, "USB");
+            seg_addf(&rows[0], COLOR_GRAY, "  NO HOST");
+        }
 
-    /* LINK：活跃连接数（SigmaStudio 可能并发开多条） */
-    seg_addf(&rows[1], br->clients ? COLOR_GREEN : COLOR_GRAY, "%u", (unsigned)br->clients);
-    seg_addf(&rows[1], COLOR_GRAY, " OF 4 MAX");
+        /* LINK：SigmaStudio 里选的通信模式（0=I2C，1=SPI） */
+        seg_addf(&rows[1], br->usb_format ? COLOR_ORANGE : COLOR_GREEN, "%s",
+                 br->usb_format ? "SPI?" : "I2C");
+        seg_addf(&rows[1], COLOR_GRAY, "  %s", br->usb_configured ? "READY" : "WAIT");
+    } else {
+        /* PC：客户端地址与端口（没连时给出明确提示，而不是空白） */
+        if (br->client_ip[0] != '\0') {
+            seg_addf(&rows[0], COLOR_GREEN, "%s", br->client_ip);
+            seg_addf(&rows[0], COLOR_GRAY, ":%u", (unsigned)br->port);
+        } else {
+            seg_addf(&rows[0], COLOR_ORANGE, "WAITING");
+            seg_addf(&rows[0], COLOR_GRAY, " :%u", (unsigned)br->port);
+        }
+
+        /* LINK：活跃连接数（SigmaStudio 可能并发开多条） */
+        seg_addf(&rows[1], br->clients ? COLOR_GREEN : COLOR_GRAY, "%u", (unsigned)br->clients);
+        seg_addf(&rows[1], COLOR_GRAY, " OF 4 MAX");
+    }
 
     /* COUNT：累计转发的写/读报文数 */
     seg_addf(&rows[2], COLOR_GRAY, "W ");
@@ -660,27 +679,35 @@ static void build_bridge_rows(const ui_bridge_info_t *br, br_row_t *rows)
     }
 }
 
-static void draw_bridge_page(const br_row_t *rows, bool wifi_ok, bool waiting)
+static void draw_bridge_page(const br_row_t *rows, bool wifi_ok, bool waiting,
+                             const ui_bridge_info_t *br)
 {
-    static const char *const labels[BR_ROWS] = {
+    static const char *const labels_tcp[BR_ROWS] = {
         "PC", "LINK", "COUNT", "LAST", "RESP", "LOCAL", "WIFI",
     };
+    static const char *const labels_usb[BR_ROWS] = {
+        "USB", "MODE", "COUNT", "LAST", "RESP", "LOCAL", "WIFI",
+    };
+    const char *const *labels = br->is_usb ? labels_usb : labels_tcp;
 
     st7789_fill(COLOR_BLACK);
 
-    /* 状态栏：青点 + SIGMASTUDIO + WiFi 图标 */
+    /* 状态栏：青点 + 协议名 + WiFi 图标 */
     draw_dot(6, 6, 3, COLOR_CYAN);
-    st7789_draw_text(14, 2, "SIGMASTUDIO", COLOR_CYAN, COLOR_BLACK, 1);
+    st7789_draw_text(14, 2, br->is_usb ? "USBI (USB)" : "SIGMASTUDIO",
+                     COLOR_CYAN, COLOR_BLACK, 1);
     draw_wifi_icon(ST7789_WIDTH - 11, 8, wifi_ok ? COLOR_GREEN : COLOR_GRAY);
     st7789_fill_rect(0, STATUS_H, ST7789_WIDTH, 1, COLOR_DKGRAY);
 
     /* 标题 */
-    const char *title = "ONLINE DEBUG";
+    const char *title = br->is_usb ? "USBI MODE" : "ONLINE DEBUG";
     st7789_draw_text((ST7789_WIDTH - st7789_text_width(title, 2)) / 2, BR_TITLE_Y,
                      title, COLOR_WHITE, COLOR_BLACK, 2);
 
     /* 副标题：区分"已有连接"与"还在等连接"，免得用户看到 0 不知道怎么下手 */
-    const char *sub = waiting ? "WAITING FOR SIGMASTUDIO" : "PC - ESP32 - ADAU1452";
+    const char *sub = waiting
+                      ? (br->is_usb ? "WAITING FOR USB DRIVER" : "WAITING FOR SIGMASTUDIO")
+                      : "PC - ESP32 - ADAU1452";
     st7789_draw_text((ST7789_WIDTH - st7789_text_width(sub, 1)) / 2, BR_SUB_Y,
                      sub, waiting ? COLOR_ORANGE : COLOR_GREEN, COLOR_BLACK, 1);
 
@@ -705,7 +732,7 @@ static void draw_bridge_page(const br_row_t *rows, bool wifi_ok, bool waiting)
     st7789_draw_text((ST7789_WIDTH - st7789_text_width(note1, 2)) / 2, BR_NOTE1_Y,
                      note1, COLOR_ORANGE, COLOR_BLACK, 2);
 
-    const char *note2 = "BACK WHEN BRIDGE OFF";
+    const char *note2 = br->is_usb ? "BACK WHEN USBI OFF" : "BACK WHEN BRIDGE OFF";
     st7789_draw_text((ST7789_WIDTH - st7789_text_width(note2, 1)) / 2, BR_NOTE2_Y,
                      note2, COLOR_YELLOW, COLOR_BLACK, 1);
 
@@ -750,7 +777,8 @@ static bool render_bridge_page(const ui_bridge_info_t *br, bool wifi_ok)
             s_br_hold_frames--;
             return true;                 /* 仍由本页占屏，只是本帧不重绘 */
         }
-        draw_bridge_page(rows, wifi_ok, br->clients == 0);
+        draw_bridge_page(rows, wifi_ok,
+                         br->is_usb ? !br->usb_configured : (br->clients == 0), br);
 
         memcpy(s_br_rows, rows, sizeof(s_br_rows));
         s_br_rows_valid = true;

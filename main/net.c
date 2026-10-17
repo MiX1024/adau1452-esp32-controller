@@ -2,6 +2,7 @@
 #include "ui.h"   /* ui_db_to_percent_float / ui_percent_to_db */
 #include "adau1452.h"
 #include "sigma_tcp.h"
+#include "usbi.h"
 #include "dsp_image.h"
 #include "logbuf.h"
 #include "dsp_graph.h"
@@ -180,6 +181,36 @@ static void add_bridge_json(cJSON *root)
 }
 
 /*
+ * USBi（USB 直连 SigmaStudio）状态。
+ * 与 bridge 分开一个对象：网页据此显示开关、USB 枚举状态和转发统计。
+ */
+static void add_usbi_json(cJSON *root)
+{
+    usbi_status_t st;
+    usbi_get_status(&st);
+
+    cJSON_AddBoolToObject(root, "enabled", st.enabled);
+    cJSON_AddBoolToObject(root, "installed", st.installed);
+    cJSON_AddBoolToObject(root, "mounted", st.mounted);
+    cJSON_AddBoolToObject(root, "configured", st.configured);
+    cJSON_AddNumberToObject(root, "attach_count", st.attach_count);
+    cJSON_AddNumberToObject(root, "pkt_write", st.pkt_write);
+    cJSON_AddNumberToObject(root, "pkt_read", st.pkt_read);
+    cJSON_AddNumberToObject(root, "cmd_other", st.cmd_other);
+    cJSON_AddNumberToObject(root, "errors", st.errors);
+    cJSON_AddNumberToObject(root, "last_addr", st.last_addr);
+    cJSON_AddNumberToObject(root, "last_len", st.last_len);
+    cJSON_AddBoolToObject(root, "last_is_read", st.last_is_read);
+    cJSON_AddNumberToObject(root, "last_format", st.last_format);
+    cJSON_AddNumberToObject(root, "last_value", st.last_value);
+    cJSON_AddNumberToObject(root, "last_index", st.last_index);
+    cJSON_AddNumberToObject(root, "last_us", st.last_us);
+    cJSON_AddNumberToObject(root, "max_us", st.max_us);
+    cJSON_AddNumberToObject(root, "write_status", st.write_status);
+    cJSON_AddNumberToObject(root, "read_status", st.read_status);
+}
+
+/*
  * WiFi 链路质量。这是排查"接路由器偶尔崩、直连却稳定"的第一现场数据：
  * RSSI 差（< -75dBm）或信道拥塞会直接导致 TCP 丢包重传，
  * 而重传要等 RTO（~1.5s），早就超过 SigmaStudio 的等待极限了。
@@ -310,6 +341,11 @@ static char *build_state_json(bool with_log, size_t log_cap)
     add_bridge_json(br);
     cJSON_AddItemToObject(root, "bridge", br);
 
+    /* USBi（USB 直连 SigmaStudio）状态 */
+    cJSON *usb = cJSON_CreateObject();
+    add_usbi_json(usb);
+    cJSON_AddItemToObject(root, "usbi", usb);
+
     cJSON *img = cJSON_CreateObject();
     add_dspimg_json(img);
     cJSON_AddItemToObject(root, "dspimg", img);
@@ -332,8 +368,8 @@ static char *build_state_json(bool with_log, size_t log_cap)
     cJSON_AddNumberToObject(eq, "applied", eq_store_applied());
     cJSON_AddItemToObject(root, "eq", eq);
 
-    /* 是否正在 SigmaStudio 调试（前端用于给日志加一句说明，日志照样会推） */
-    cJSON_AddBoolToObject(root, "bridging", sigma_tcp_busy());
+    /* 是否正在 SigmaStudio 调试（网页/PC 端据此判断该不该让位） */
+    cJSON_AddBoolToObject(root, "bridging", sigma_tcp_busy() || usbi_busy());
 
     /* 日志随状态帧一起发（同一 fd 上 httpd_ws_send_frame_async 不能并发发送，
      * 分成两帧会相互打断导致推送悄悄失效）。只在订阅（网页勾了「显示日志」）时才附带。 */
@@ -800,6 +836,12 @@ static esp_err_t bridge_set_handler(httpd_req_t *req)
     }
     cJSON_Delete(root);
 
+    /* 互斥：TCP 桥接与 USBi 都会独占 DSP，开启一个就先关掉另一个 */
+    if (enabled && !cfg.enabled && usbi_enabled()) {
+        usbi_set_enabled(false);
+        ESP_LOGW(TAG, "开启桥接服务：已自动关闭 USBi（两者互斥）");
+    }
+
     esp_err_t e = sigma_tcp_set_config(enabled, port, local, resp_gap);
     if (e == ESP_OK) {
         /* 逐报文日志是独立的开关，单独设置 */
@@ -814,6 +856,61 @@ static esp_err_t bridge_set_handler(httpd_req_t *req)
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddBoolToObject(resp, "ok", true);
     add_bridge_json(resp);
+    return send_json(req, resp);
+}
+
+/* ---- /api/usbi ：USB（USBi）模式开关与状态 ----
+ * 打开后 ESP32 的原生 USB 口枚举成 Analog Devices USBi，
+ * SigmaStudio 在 Hardware Configuration 里选 USBi 即可（无需 WiFi）。
+ * 与 TCP 桥接互斥：打开 USBi 会自动关掉桥接服务。 */
+static esp_err_t usbi_get_handler(httpd_req_t *req)
+{
+    cJSON *root = cJSON_CreateObject();
+    add_usbi_json(root);
+    return send_json(req, root);
+}
+
+static esp_err_t usbi_set_handler(httpd_req_t *req)
+{
+    char body[256];
+    if (read_body(req, body, sizeof(body)) < 0) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad body");
+        return ESP_FAIL;
+    }
+    cJSON *root = cJSON_Parse(body);
+    if (root == NULL) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid json");
+        return ESP_FAIL;
+    }
+
+    cJSON *it = cJSON_GetObjectItem(root, "enabled");
+    if (!it || !cJSON_IsBool(it)) {
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing enabled");
+        return ESP_FAIL;
+    }
+    const bool on = cJSON_IsTrue(it);
+    cJSON_Delete(root);
+
+    if (on) {
+        /* 互斥：先关掉 TCP 桥接（两者都独占 DSP） */
+        sigma_tcp_config_t cfg = sigma_tcp_get_config();
+        if (cfg.enabled) {
+            sigma_tcp_set_config(false, cfg.port, cfg.local_control, cfg.resp_gap_us);
+            ESP_LOGW(TAG, "开启 USBi：已自动关闭 TCP 桥接（两者互斥）");
+        }
+    }
+
+    esp_err_t e = usbi_set_enabled(on);
+    if (e != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
+                            "USBi 切换失败（USB 初始化失败，详见设备日志）");
+        return ESP_FAIL;
+    }
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", true);
+    add_usbi_json(resp);
     return send_json(req, resp);
 }
 
@@ -863,12 +960,15 @@ static void i2c_config_load(void)
  */
 static bool bridge_blocks_local_write(httpd_req_t *req)
 {
-    if (!sigma_tcp_get_config().enabled && !sigma_tcp_busy()) {
+    const bool usb = usbi_enabled();
+    if (!sigma_tcp_get_config().enabled && !sigma_tcp_busy() && !usb) {
         return false;
     }
     httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
-                        "桥接服务已开启，DSP 由 SigmaStudio 管理；"
-                        "请先在「SigmaStudio 桥接」里关闭桥接服务");
+                        usb
+                        ? "USBi 已开启，DSP 由 SigmaStudio 管理；请先在「USBi（USB）」里关闭 USBi"
+                        : "桥接服务已开启，DSP 由 SigmaStudio 管理；"
+                          "请先在「SigmaStudio 桥接」里关闭桥接服务");
     return true;
 }
 
@@ -1643,6 +1743,14 @@ static esp_err_t vol_handler(httpd_req_t *req)
         cJSON_AddBoolToObject(br, "client", st.client);
         cJSON_AddItemToObject(root, "bridge", br);
 
+        /* USBi 也单独给一份（PC 端据此判断本地音量该不该写） */
+        usbi_status_t us;
+        usbi_get_status(&us);
+        cJSON *usb = cJSON_CreateObject();
+        cJSON_AddBoolToObject(usb, "enabled", us.enabled);
+        cJSON_AddBoolToObject(usb, "configured", us.configured);
+        cJSON_AddItemToObject(root, "usbi", usb);
+
         cJSON *wf = cJSON_CreateObject();
         add_wifi_link_json(wf);
         cJSON_AddItemToObject(root, "wifi", wf);
@@ -1677,11 +1785,12 @@ static esp_err_t vol_handler(httpd_req_t *req)
         cJSON_AddStringToObject(resp, "reason", "bad idx");
         return send_json(req, resp);
     }
-    /* 桥接期间 DSP 归 SigmaStudio 管：拒绝但回 JSON（而非 HTTPD_500），
+    /* SigmaStudio 调试期间 DSP 归 SigmaStudio 管：拒绝但回 JSON（而非 HTTPD_500），
      * PC 端好在界面上给出明确提示 */
-    if (sigma_tcp_get_config().enabled || sigma_tcp_busy()) {
+    if (sigma_tcp_get_config().enabled || sigma_tcp_busy() || usbi_enabled()) {
         cJSON_AddBoolToObject(resp, "ok", false);
-        cJSON_AddStringToObject(resp, "reason", "bridge");
+        cJSON_AddStringToObject(resp, "reason",
+                                usbi_enabled() ? "usbi" : "bridge");
         return send_json(req, resp);
     }
     const float dbv = s_cb->channel_is_percent(i) ? ui_percent_to_db(v) : v;
@@ -1903,6 +2012,17 @@ static esp_err_t start_httpd(void)
         .uri = "/api/bridge", .method = HTTP_POST, .handler = bridge_set_handler, .user_ctx = NULL,
     };
     httpd_register_uri_handler(s_server, &br_set);
+
+    /* USBi（USB 直连 SigmaStudio）开关与状态 */
+    httpd_uri_t usbi_get = {
+        .uri = "/api/usbi", .method = HTTP_GET, .handler = usbi_get_handler, .user_ctx = NULL,
+    };
+    httpd_register_uri_handler(s_server, &usbi_get);
+
+    httpd_uri_t usbi_set = {
+        .uri = "/api/usbi", .method = HTTP_POST, .handler = usbi_set_handler, .user_ctx = NULL,
+    };
+    httpd_register_uri_handler(s_server, &usbi_set);
 
     /* DSP 程序映像：查询 / 操作 / 下载备份 */
     httpd_uri_t img_get = {

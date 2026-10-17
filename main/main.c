@@ -14,6 +14,7 @@
 #include "ui.h"
 #include "net.h"
 #include "sigma_tcp.h"
+#include "usbi.h"
 #include "dsp_image.h"
 #include "logbuf.h"
 #include "eq_store.h"
@@ -385,13 +386,13 @@ static bool app_set_volume_db(int idx, float db)
         return false;
     }
     /*
-     * ⚠️ 桥接服务开启时**绝不能再写 DSP**。
+     * ⚠️ 桥接/USBi 开启时**绝不能再写 DSP**。
      *
      * 原因不只是"让位"：SigmaStudio 一旦重编过程序，本地硬编码的地址
      * （29/226/164/161）就可能指向完全不同的参数，写进去会改错东西甚至
      * 破坏正在调试的程序。所以这里直接拒绝，不只靠主循环不调用。
      */
-    if (sigma_tcp_get_config().enabled) {
+    if (sigma_tcp_get_config().enabled || usbi_enabled()) {
         return false;
     }
     return apply_volume(idx, db);
@@ -412,7 +413,7 @@ static void app_get_state(float db[4], float min_db[4], float max_db[4],
      * "SigmaStudio 调试中" 与 "DSP 离线" 之间反复跳。
      * SigmaStudio 正连着，就说明 DSP 显然在线。
      */
-    *dsp_ok = s_dsp_ok || sigma_tcp_busy();
+    *dsp_ok = s_dsp_ok || sigma_tcp_busy() || usbi_busy();
     *lv_l = s_lv_l;
     *lv_r = s_lv_r;
 }
@@ -447,9 +448,9 @@ static void app_bind_get(net_bind_slot_t out[NET_BIND_SLOTS])
 
 static bool app_bind_set(const net_bind_slot_t in[NET_BIND_SLOTS])
 {
-    /* 桥接服务开着时 DSP 由 SigmaStudio 管（地址随时可能变），不允许改绑定 */
-    if (sigma_tcp_get_config().enabled) {
-        ESP_LOGW(TAG, "桥接服务开启，拒绝修改绑定");
+    /* 桥接/USBi 开着时 DSP 由 SigmaStudio 管（地址随时可能变），不允许改绑定 */
+    if (sigma_tcp_get_config().enabled || usbi_enabled()) {
+        ESP_LOGW(TAG, "桥接/USBi 开启，拒绝修改绑定");
         return false;
     }
     for (int i = 0; i < NET_BIND_SLOTS; i++) {
@@ -550,6 +551,15 @@ void app_main(void)
         ESP_LOGW(TAG, "ADAU1452 init failed, will keep retrying");
     }
 
+    /*
+     * USBi（USB 直连 SigmaStudio）：从 NVS 读开关；上次开着的话直接把
+     * ESP32-S3 原生 USB 安装成 USBi 设备。
+     * ⚠️ 必须在 nvs_flash_init() 之后调用；USB 与 UART 互不影响。
+     */
+    if (usbi_init() != ESP_OK) {
+        ESP_LOGW(TAG, "USBi 初始化失败（不影响本地控制）");
+    }
+
     /* 初始化编码器 */
     ec11_init();
 
@@ -577,7 +587,11 @@ void app_main(void)
      *    否则会把 NVS 里的音量写到错误地址。 */
     const bool boot_local_ok = sigma_tcp_get_config().local_control;
     bool volumes_synced = false;
-    if (s_dsp_ok && boot_local_ok && !dsp_image_autoload_pending()) {
+    if (usbi_enabled()) {
+        /* USBi 模式：DSP 由 PC 上的 SigmaStudio 管，本地绝不能抢先写 */
+        volumes_synced = true;
+        ESP_LOGW(TAG, "USBi 已开启，跳过上电音量同步（DSP 由 SigmaStudio 管理）");
+    } else if (s_dsp_ok && boot_local_ok && !dsp_image_autoload_pending()) {
         sync_dsp_params(has_saved);
         volumes_synced = true;
     } else if (!boot_local_ok) {
@@ -612,12 +626,22 @@ void app_main(void)
      * （socket 依赖 lwIP 已初始化，必须放在 net_init 之后） */
     sigma_tcp_init();
 
+    /*
+     * 兜底：USBi 与 TCP 桥接互斥。若 NVS 里两个开关都还开着（例如上次异常掉电
+     * 时的中间状态），启动时以 USBi 为准，把 TCP 桥接关掉，避免两边同时抢 I2C。
+     */
+    if (usbi_enabled() && sigma_tcp_get_config().enabled) {
+        sigma_tcp_config_t cfg0 = sigma_tcp_get_config();
+        sigma_tcp_set_config(false, cfg0.port, cfg0.local_control, cfg0.resp_gap_us);
+        ESP_LOGW(TAG, "USBi 已开启：启动时自动关闭 TCP 桥接（两者互斥）");
+    }
+
     while (1) {
         /*
          * 上电自动加载的监控心跳：等 1452 上线 → 推送 → 巡检重建。
          * SigmaStudio 正连着时先让位（allow=false），等它断开再继续。
          */
-        dsp_image_boot_tick(!sigma_tcp_busy());
+        dsp_image_boot_tick(!sigma_tcp_busy() && !usbi_enabled());
 
         /*
          * ⚠️ 固件刚被（重新）推送时，DSP 里的参数是**录制时的初值**
@@ -626,7 +650,7 @@ void app_main(void)
          * 这一步**不能**用 dsp_access 判断：桥接服务开着时 dsp_access 是 false，
          * 但推送仍然会发生（推送只要求当前没有 SigmaStudio 客户端连接）。
          */
-        if (sigma_tcp_get_config().local_control) {
+        if (sigma_tcp_get_config().local_control && !usbi_enabled()) {
             const uint32_t pc = dsp_image_push_count();
             if (pc != push_seen) {
                 push_seen = pc;
@@ -648,8 +672,11 @@ void app_main(void)
          * 而且网页与屏幕容易显示不一致（两者判断口径不同就会出现）。
          */
         const bool bridge_on = sigma_tcp_get_config().enabled;
+        const bool usbi_on = usbi_enabled();
         const bool local_ctl = sigma_tcp_get_config().local_control;
-        const bool dsp_access = local_ctl && !bridge_on && !dsp_image_busy();
+        /* 任一 SigmaStudio 通道（TCP 桥接 / USB USBi）开启，本地就让位 */
+        const bool sig_on = bridge_on || usbi_on;
+        const bool dsp_access = local_ctl && !sig_on && !dsp_image_busy();
 
         if (dsp_access) {
             /* DSP 上电可能晚于 ESP32：未完成音量同步时每 500ms 重试探测一次。
@@ -732,28 +759,46 @@ void app_main(void)
 
         /*
          * 渲染 UI。
-         * 桥接服务开启（开关打开）就整屏切成"调试页"：显示 SigmaStudio 链接与
-         * 转发状态 + 本机网络信息；关闭后自动切回电平表页。
+         * 任一 SigmaStudio 通道（TCP 桥接 / USB USBi）开着就整屏切成"调试页"：
+         * 显示链路与转发状态 + 本机网络信息；关掉后自动切回电平表页。
          */
         ui_dsp_state_t ui_state;
         ui_bridge_info_t brinfo;
         const ui_bridge_info_t *brp = NULL;
-        if (bridge_on) {
+        if (sig_on) {
             ui_state = UI_DSP_BRIDGE;
 
-            sigma_tcp_status_t st;
-            sigma_tcp_get_status(&st);
             memset(&brinfo, 0, sizeof(brinfo));
-            strncpy(brinfo.client_ip, st.client_ip, sizeof(brinfo.client_ip) - 1);
-            brinfo.port        = st.port;
-            brinfo.clients     = (uint8_t)st.active;
-            brinfo.pkt_write   = st.pkt_write;
-            brinfo.pkt_read    = st.pkt_read;
-            brinfo.last_addr   = st.last_addr;
-            brinfo.last_len    = st.last_len;
-            brinfo.last_is_read = st.last_is_read;
-            brinfo.lat_avg_us  = st.lat_avg_us;
-            brinfo.errors      = st.errors;
+            if (usbi_on) {
+                /* USB（USBi）模式：没有 IP/端口，改为显示 USB 枚举/驱动状态 */
+                usbi_status_t us;
+                usbi_get_status(&us);
+                brinfo.is_usb        = true;
+                brinfo.usb_mounted   = us.mounted;
+                brinfo.usb_configured = us.configured;
+                brinfo.usb_format    = us.last_format;
+                brinfo.clients       = us.configured ? 1 : 0;
+                brinfo.pkt_write     = us.pkt_write;
+                brinfo.pkt_read      = us.pkt_read;
+                brinfo.last_addr     = us.last_addr;
+                brinfo.last_len      = us.last_len;
+                brinfo.last_is_read  = us.last_is_read;
+                brinfo.lat_avg_us    = us.last_us;
+                brinfo.errors        = us.errors;
+            } else {
+                sigma_tcp_status_t st;
+                sigma_tcp_get_status(&st);
+                strncpy(brinfo.client_ip, st.client_ip, sizeof(brinfo.client_ip) - 1);
+                brinfo.port        = st.port;
+                brinfo.clients     = (uint8_t)st.active;
+                brinfo.pkt_write   = st.pkt_write;
+                brinfo.pkt_read    = st.pkt_read;
+                brinfo.last_addr   = st.last_addr;
+                brinfo.last_len    = st.last_len;
+                brinfo.last_is_read = st.last_is_read;
+                brinfo.lat_avg_us  = st.lat_avg_us;
+                brinfo.errors      = st.errors;
+            }
 
             net_link_info_t li;
             net_get_link_info(&li);

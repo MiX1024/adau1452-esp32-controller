@@ -11,8 +11,13 @@
 #include "freertos/semphr.h"
 
 #define I2C_PORT         0
-#define I2C_SDA_PIN      GPIO_NUM_19
-#define I2C_SCL_PIN      GPIO_NUM_20
+/*
+ * ⚠️ 引脚说明：GPIO19/20 是 ESP32-S3 的原生 USB D-/D+（板子上标 "USB" 的 Type-C），
+ *    现在用于 USBi（USB 设备）。ADAU1452 的 I2C 因此改到 GPIO15/16。
+ *    接线：GPIO15 → ADAU1452 SDA，GPIO16 → ADAU1452 SCL（核心板 SW2 仍需拨到 IIC）。
+ */
+#define I2C_SDA_PIN      GPIO_NUM_15
+#define I2C_SCL_PIN      GPIO_NUM_16
 #define I2C_FREQ_HZ      400000
 
 /* 程序 RAM 写入时序：必须 4 字节一次 + 间隔，否则 I2C 有 ACK 但指令没进 DSP（无声） */

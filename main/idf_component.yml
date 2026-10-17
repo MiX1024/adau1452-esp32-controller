@@ -1,0 +1,10 @@
+dependencies:
+  idf: ">=5.0"
+
+  # TinyUSB + Espressif 封装（USB Device 栈）
+  # ⚠️ 来源是 ESP-IDF 组件管理器（components.espressif.com），首次 build 会自动下载到
+  #    managed_components/（已在 .gitignore 里，和 build/ 一样属于产物）。
+  #    国内网络若下载失败，可在 build 前设置：
+  #      $env:IDF_COMPONENT_REGISTRY_URL = "https://components.espressif.cn"
+  espressif/esp_tinyusb:
+    version: "2.4.0"
