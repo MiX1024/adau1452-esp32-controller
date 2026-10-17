@@ -305,119 +305,52 @@ L/R 电平表 + 4 路滑块 + WiFi 信息。编译：`powershell -ExecutionPolic
 
 ## 十一、USBi（USB 直连 SigmaStudio）
 
-> 2026-10 新增：ESP32-S3 的原生 USB 口可以**完全替代**真实的 USBi 仿真器
-> （EVAL-ADUSB2EBZ / 板子上那根 10pin 排线的调试器）。
+> 2026-10 新增：ESP32-S3 的原生 USB 口可直接枚举成 ADI USBi（`0456:7031`），
+> **替代**真实的 EVAL-ADUSB2EBZ / 板载 10pin 调试器。
 
-### 原理
-
-SigmaStudio 4.7 通过 `ADIUSBi.dll` + `CyUSB.sys` 与 USBi 通信；USBi 对 PC 只是一个
-**vendor 自定义类、只用控制端点（EP0）**的 USB 设备：
-
-| 请求（bRequest） | 方向 | 含义 |
-|---|---|---|
-| `0xB2` | OUT | 写 DSP：数据段 = `[addrH addrL payload...]` |
-| `0xB3` | OUT | 取读地址：数据段 = `[addrH addrL]` |
-| `0xB4` | IN | 读 DSP：返回 payload |
-| `0xB5` | IN | 写完成查询（1 字节状态，1=成功） |
-| `0xB6` | IN | 读完成查询（1 字节状态，1=成功） |
-| `0xB7`–`0xBA` | OUT | 复位 / 目标板 5V / LED / 复位翻转（一律 ACK） |
-
-`wValue = chipAddress >> 1`（I2C 7 位地址，本机固定 `0x3B`），
-`wIndex = (clatch << 8) | format`（format：`0=I2C`、`1=SPI`）。
-数据段里的 2 字节地址语义与 TCP 桥接完全一样（`<0xF000` 按字寻址），
-所以 `usbi.c` 直接复用 `adau1452_write_block()/read_block()`，并且同样会调用
-`dsp_image_record()` —— 用 USB 调 SigmaStudio 时，网页上的「开始录制」照样能用。
-
-ESP32 侧用 TinyUSB 注册一个只有控制端点的 vendor 设备（`0x0456:0x7031`，
-全速、EP0=64、`bDeviceClass=0xFF`），并给 vendor 请求提供 `tud_vendor_control_xfer_cb()`；
-另外用 `usbd_app_driver_get_cb()` 注册一个只"认领接口"的最小类驱动
-（TinyUSB 的 SET_CONFIGURATION 要求每个接口都有驱动，否则 Windows 会一直等不到配置完成）。
+SigmaStudio 通过 `ADIUSBi.dll` + `CyUSB.sys`，用**控制端点（EP0）**的 vendor 请求通信；
+`usbi.c` 把这些请求原样转发到 ADAU1452 的 I2C：`0xB2` 写 / `0xB3`+`0xB4` 读 /
+`0xB5`、`0xB6` 状态 / `0xB7`~`0xBA` 复位、电源、LED。`wValue = chipAddress>>1`，
+`wIndex = (clatch<<8)|format`，地址语义与 TCP 桥接一致（`<0xF000` 按字）；
+USB 调参期间网页「录制」同样有效。
 
 ### 使用
 
-1. 网页「工具」页 → **USBi（USB 直连 SigmaStudio）** → 打开「启用 USBi」。
-2. 用 USB-C 数据线把电脑接到板子上标 **`USB`** 的 Type-C 口（和 COM8 那个 `UART` 口是两个口，可同时插）。
-3. Windows 设备管理器出现 **Analog Devices USBi (programmed)**，驱动就是 SigmaStudio 安装的
-   CYUSB 3.4.2.147，无需另装。
-4. SigmaStudio 4.7：**Hardware Configuration** 里拖入 **USBi** → 应能检测到设备（USB 标签变橙色）
-   → 把它连到 ADAU1452 → 通信模式选 **I2C** → 之后即可 **Link Compile Download** / 在线调参。
-5. 用完在网页关掉开关：USB 设备从电脑消失，本地编码器/音量/电平恢复。
+1. 网页「工具」→ **USBi（USB 直连 SigmaStudio）** → 启用 USBi。
+2. 用 USB-C 线把电脑接到板子标 **`USB`** 的 Type-C 口（与 COM8 的 `UART` 口可同时插）。
+3. 设备管理器出现 **Analog Devices USBi (programmed)**（CYUSB 3.4.2.147，SigmaStudio 自带）。
+4. SigmaStudio 4.7：**Hardware Configuration** 拖入 **USBi** → 连到 ADAU1452 → 通信模式选 **I2C**
+   → 之后即可 **Link Compile Download** / 在线调参。
+5. 用完关开关：USB 设备消失，本地控制恢复。
 
-> ⚠️ 测试时拔掉真实的 USBi 仿真器：同 VID/PID 的两个设备会让 SigmaStudio 分不清。
-> ⚠️ 模式互斥：USBi 与「SigmaStudio 桥接」都独占 DSP，开一个会自动关另一个；
->    本地控制与「上电自动推 DSP 程序」在 USBi 开启期间一并让位。
+> ⚠️ 与「SigmaStudio 桥接」互斥；开启期间本地音量/电平与上电自动推程序全部让位。
+> ⚠️ 不要同时插真实 USBi（同 VID/PID 会让 SigmaStudio 分不清）；接真机前请还原 `usbi_host_patch` 加速 DLL。
+> ⚠️ I2C 必须接 GPIO15/16（19/20 是原生 USB）。
 
-### 验证状态（2026-10-17，本机实测）
+### 性能
 
-- Windows 枚举为 `Analog Devices USBi (programmed)`，CYUSB 驱动自动加载，ProblemCode=0
-- 用 CyUSB 直接发 vendor 请求读 DSP：`0x007A`（总音量）读到 `0x000F9AA9` = **-24.30 dB**
-  （与设备 NVS 值一致）；`0xF004`（PLL_LOCK）读到 `0x0001`
-- 写回同一值成功（写完成查询返回 1）；64 字节整块读成功（验证 EP0 多包 IN）
-- 设备端统计 `pkt_write/pkt_read/errors=0`，单条命令耗时约 0.5–2 ms
+瓶颈是 **ESP32-S3 只有全速 USB（12Mbps）**：一次控制传输约 **4ms**（与数据量无关），
+4 字节读约 16ms、4 字节写约 8ms，而 I2C 事务本身只占 0.3~0.6ms。FX2 是高速 USB，
+同样 I2C 下自然更快——这是 USB 硬件差距，固件无法消除。
 
-### 性能：为什么比 CY7C68013A（FX2）慢，能优化到什么程度
+已做的优化：
 
-主瓶颈**不是 I2C，而是 ESP32-S3 的 USB 只有全速（12 Mbps）**：
-
-| 项目 | 实测 |
-|---|---|
-| ESP32-S3 USBi：一次控制传输（数据量 0/1/8/64 字节都一样） | **~4.0 ms**（≈4 个 1ms 帧） |
-| 一次 4 字节读（0xB3+0xB5+0xB4+0xB6，4 次传输） | 16.2 ms |
-| 一次 4 字节写（0xB2+0xB5，2 次传输） | 8.1 ms |
-| 其中真正的 I2C 事务（4 字节读，400kHz） | 仅 0.3~0.6 ms |
-
-FX2 是 USB 2.0 高速（480Mbps），一次控制传输约 0.5ms，所以同样的 I2C 下它"感觉快 8 倍"——
-**这是 USB 速度的差距，不是 ESP32 的 I2C 差**。ESP32-S3 硬件只有全速 USB，这一点无法用固件改变。
-
-在这个前提下已经做的优化：
-
-1. **固件：USBi 写入快路径**（`usbi.c`）
-   - 原 `adau1452_write_block()` 是给整片冷启动回放设计的：PROGRAM 区 4 字节一次 + 300µs 间隔，
-     一条 60 字节的 USBi 写命令要拆成 15 次 I2C 事务（13.6ms）
-   - 现在改成一条命令一次大块 I2C 写（每块最多 248 字节）+ 一次 settle：
-     **13.6ms → 2.0ms（400kHz）/ 1.26ms（1MHz）**，回读校验一致
-   - 读取也支持大块（240 字节/次），大读时减少固定开销
-   - USB 任务优先级提到 24（高于 WiFi 的 23），减少 I2C 完成后的唤醒延迟
-   - 估算：18.9KB 程序下载从 **~5.0s → ~2.9s**
-
-2. **可选：主机端加速 DLL**（[`usbi_host_patch/`](usbi_host_patch/)，实验性、可一键还原）
-   - SigmaStudio 原版 `ADIUSBi.dll` 每次传输限 64 字节、且每次读/写后都多发 0xB5/0xB6 状态轮询
-   - 本项目的固件是同步完成的，这两件事都可以省掉：
-     传输块提到 4096 字节 + 跳过状态轮询
-   - 实测：4 字节读 **16.2→8.0ms**、4 字节写 **8.1→4.0ms**、
-     18.9KB 程序下载估算 **~5.0s→~0.9s**（详见该目录 README）
-   - ⚠️ 会替换 SigmaStudio 安装目录里的 `ADIUSBi.dll`（自动备份 `.orig`，`uninstall.ps1` 还原），
-     仅对本项目 ESP32-S3 USBi 有效；接真实 USBi 仿真器前请还原
-
-3. **I2C 时钟可调**：网页「地址调试」里可把 SCL 设为 600kHz / 1MHz（本项目实测 0 错误），
-   对下载速度有额外帮助；但 ADAU1452 官方上限是 400kHz，超频属越规操作。
+- **固件**：USBi 写入走大块 I2C 快路径（248 字节/块），60 字节 PROGRAM 写 **13.6ms → 2.0ms**
+  （400kHz）；18.9KB 程序下载估算 ~5.0s → ~2.9s
+- **可选主机端加速**（[`usbi_host_patch/`](usbi_host_patch/)，可一键还原）：跳过状态轮询 +
+  4096 字节打包，4 字节读 **16.2→8.0ms**、4 字节写 **8.1→4.0ms**、18.9KB 下载 **~5.0s→~0.9s**
+- **I2C 时钟**：网页「地址调试」可设 600kHz / 1MHz（本项目实测 0 错误），但 ADAU1452 官方上限 400kHz
 
 ---
 
-## 十二、仓库说明与许可
-
-### 哪些内容没有进仓库
-
-| 路径 | 情况 |
-|---|---|
-| `main/wifi_secrets.h` | **不入库**（含真实 WiFi 凭据）；模板见 `main/wifi_secrets.example.h` |
-| `build/`、`sdkconfig` | 构建产物，约 150MB+，可由源码重建 |
-| `win-volume-ctl/dist/*.exe`、`*.log` | 编译产物，用 `build.ps1` 自行生成 |
-| `dsp_project/`、`tools/`、`docs/` | SigmaStudio 导出文件、PC 侧调试脚本与排查存档，**不随仓库发布** |
-| `photo/*.jpg` | README 展示用图；网页截图为**实机截图**，画面中带设备自身的局域网 IP |
-
-> 关于 `dsp_project/`：其中的 `*.xml`、`*_IC_1*.h` 由 **Analog Devices SigmaStudio 生成**，
-> 文件头带 ADI 版权声明（*"may not be distributed whole or in any part to third parties"*），
-> 因此本仓库不包含这些文件。需要时请用你自己的 SigmaStudio 工程重新导出。
-
-### 许可
+## 十二、许可
 
 本项目基于 **MIT License** 开源 —— 可自由使用、修改、分发与商用，只需保留版权声明。
 
 > **Copyright (c) 2026 MiX1024** · 完整条款见 [`LICENSE`](LICENSE)
 
-> ⚠️ 仓库中**不包含** Analog Devices SigmaStudio 生成的文件（见上一节），
-> 因此本许可证仅覆盖 `main/`、`win-volume-ctl/` 及仓库内自行编写的全部内容。
+> ⚠️ 仓库中**不包含** Analog Devices SigmaStudio 生成的文件（如 `dsp_project/` 中的导出文件）；
+> 许可证仅覆盖 `main/`、`win-volume-ctl/` 及仓库内自行编写的全部内容。
 
 ---
 
@@ -433,10 +366,12 @@ FX2 是 USB 2.0 高速（480Mbps），一次控制传输约 0.5ms，所以同样
 
 同时参考了以下开源实现与官方资料，在此一并致谢：
 
+> 特别感谢 [Kezii/rp2040-Analog-Devices-USBi](https://github.com/Kezii/rp2040-Analog-Devices-USBi)：
+> RP2040 上的 USBi 重实现，本项目 USBi 部分的行为参考。
+
 | 来源 | 用途 |
 |---|---|
 | [aventuri/sigma_tcp](https://github.com/aventuri/sigma_tcp) | TCP/IP 桥接协议蓝本 |
-| [Kezii/rp2040-Analog-Devices-USBi](https://github.com/Kezii/rp2040-Analog-Devices-USBi) | RP2040 上的 USBi 重实现，本项目 USBi 部分的行为参考 |
 | Analog Devices 官方 `sigma-tcp`（`dev-extended-mode`）与 AD wiki *TCP/IP Channels* | 14 字节报文头定义 |
 | [Wei1234c/TCPi](https://github.com/Wei1234c/TCPi) | ESP32 作服务端 + 读回 |
 | [mzulus/ESP32_ADAU1452_RAM_Loader](https://github.com/mzulus/ESP32_ADAU1452_RAM_Loader) | 地址语义与 PROGRAM 写入时序 |
